@@ -117,52 +117,37 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       math.Point<int>(midRow, 3),
     ];
     
-    _obstacles = [];
     _items = [];
-    // Spawn 3 items initially
-    for (int i = 0; i < 3; i++) {
-      _items.add(_spawnItem());
-    }
+    // Spawn exactly 1 food initially
+    final initialFood = _spawnItem(forceFood: true);
+    if (initialFood != null) _items.add(initialFood);
     setState(() {});
   }
 
-  GameItem _spawnItem() {
-    while (true) {
+  GameItem? _spawnItem({bool forceFood = false}) {
+    for (int attempts = 0; attempts < 100; attempts++) {
       final p = math.Point(_random.nextInt(_rows), _random.nextInt(_cols));
       if (!_snake.contains(p) && !_items.any((item) => item.position == p) && !_obstacles.any((o) => o.position == p)) {
-        // Randomly pick item type
-        final rand = _random.nextDouble();
-        ItemType type = ItemType.food;
-        int value = 0;
-        Duration? duration;
-
-        // Rarity Logic: 
-        // 1. Food is always available (80% default)
-        // 2. Premium items only appear after 3 minutes of play (gradual unlocking)
-        final playSeconds = _playtimeStopwatch.elapsed.inSeconds;
-        
-        if (playSeconds < 60) {
-          // First minute: 100% Food
-          type = ItemType.food;
-        } else {
-          // After 1 min, start showing coins rarely
-          if (rand < 0.15 && playSeconds > 120) {
-            type = ItemType.coin;
-            value = 5;
-          } else if (rand < 0.25 && playSeconds > 180) { // After 3 mins, show boosters
-            type = ItemType.booster;
-            duration = const Duration(seconds: 5);
-          } else if (rand < 0.30 && playSeconds > 300) { // After 5 mins, show life savers
-            type = ItemType.lifeSaver;
-            value = 1;
-          } else {
-            type = ItemType.food;
-          }
+        if (forceFood) {
+          return GameItem(position: p, type: ItemType.food);
         }
 
-        return GameItem(position: p, type: type, value: value, duration: duration);
+        final rand = _random.nextDouble();
+        final playSeconds = _playtimeStopwatch.elapsed.inSeconds;
+        
+        // Very rare power-up chance for the second slot
+        if (rand < 0.05 && playSeconds > 120) {
+          return GameItem(position: p, type: ItemType.coin, value: 5);
+        } else if (rand < 0.08 && playSeconds > 180) {
+          return GameItem(position: p, type: ItemType.booster, duration: const Duration(seconds: 5));
+        } else if (rand < 0.10 && playSeconds > 300) {
+          return GameItem(position: p, type: ItemType.lifeSaver, value: 1);
+        }
+        
+        return null; // No power-up this time
       }
     }
+    return null;
   }
 
   void _startGame() {
@@ -225,11 +210,20 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     // Check collision with any item
     int itemIndex = _items.indexWhere((item) => item.position == nextHead);
     if (itemIndex != -1) {
-      _handleItemCollection(_items[itemIndex]);
+      final collectedItem = _items[itemIndex];
+      _handleItemCollection(collectedItem);
       _items.removeAt(itemIndex);
-      // Ensure at least 3 items are always present
-      while (_items.length < 3) {
-        _items.add(_spawnItem());
+      
+      // If food was eaten, spawn EXACTLY one new food
+      if (collectedItem.type == ItemType.food) {
+        final newFood = _spawnItem(forceFood: true);
+        if (newFood != null) _items.add(newFood);
+      }
+      
+      // Occasionally try to spawn a second item (power-up) if board is nearly empty
+      if (_items.length < 2 && _random.nextDouble() < 0.15) {
+        final newItem = _spawnItem(forceFood: false);
+        if (newItem != null) _items.add(newItem);
       }
     } else {
       _snake.removeLast();
