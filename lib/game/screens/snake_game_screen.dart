@@ -8,6 +8,7 @@ import 'package:flutter_animate/flutter_animate.dart' hide Direction;
 import '../models/direction.dart';
 import '../models/level.dart';
 import '../models/snake_skin.dart';
+import '../models/obstacle.dart';
 import '../services/music_manager.dart';
 import '../services/user_progress.dart';
 import '../painters/board_painter.dart';
@@ -34,6 +35,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
 
   List<math.Point<int>> _snake = [];
   math.Point<int> _food = const math.Point<int>(0, 0);
+  List<Obstacle> _obstacles = [];
   
   Direction _direction = Direction.right;
   Direction _queuedDirection = Direction.right;
@@ -95,6 +97,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       math.Point<int>(midRow, 3),
     ];
     
+    _obstacles = [];
     _food = _spawnItem();
     setState(() {});
   }
@@ -107,8 +110,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   }
 
   void _startGame() {
-    if (_isRunning) return;
-    if (_isGameOver) _resetGame();
+    if (_isGameOver) {
+      _resetGame();
+    }
+    if (_isRunning) {
+      // If already running, just close menu
+      setState(() => _showMenu = false);
+      return;
+    }
     _isRunning = true;
     _showMenu = false;
     _startTimer();
@@ -186,12 +195,30 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
 
   void _levelUp() {
     _currentLevelNum++;
+    if (_currentLevelNum > _levels.length) _currentLevelNum = _levels.length;
     if (levelThemes.containsKey(_currentLevelNum)) {
       _currentTheme = levelThemes[_currentLevelNum]!;
     }
+    
+    // Generate obstacles for levels 2+
+    _generateObstacles();
+    
     HapticFeedback.heavyImpact();
-    // Visual flash could be added here
     _startTimer();
+  }
+
+  void _generateObstacles() {
+    _obstacles.clear();
+    if (_currentLevelNum >= 2) {
+      final currentLevel = _levels[_currentLevelNum - 1];
+      for (int i = 0; i < currentLevel.numObstacles; i++) {
+        math.Point<int> obstaclePos;
+        do {
+          obstaclePos = math.Point(_random.nextInt(_rows), _random.nextInt(_cols));
+        } while (_snake.contains(obstaclePos) || obstaclePos == _food || _obstacles.any((o) => o.position == obstaclePos));
+        _obstacles.add(Obstacle(position: obstaclePos));
+      }
+    }
   }
 
   void _handleGameOver() {
@@ -213,7 +240,15 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   }
 
   bool _isCollision(math.Point<int> p) {
-    return _snake.contains(p);
+    // Check snake collision
+    if (_snake.contains(p)) return true;
+    
+    // Check obstacle collision
+    for (final obstacle in _obstacles) {
+      if (obstacle.position == p) return true;
+    }
+    
+    return false;
   }
 
   void _queueDirection(Direction d) {
@@ -360,6 +395,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                         skin: _currentSkin,
                         direction: _direction,
                         isBulletTime: _isBulletTime,
+                        obstacles: _obstacles,
                       ),
                       size: Size(size, size),
                     ),

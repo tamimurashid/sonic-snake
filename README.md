@@ -157,8 +157,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👨‍💻 Author
 
-**Tamim Urashid**
+**Tamimu rashid**
 - GitHub: [@tamimurashid](https://github.com/tamimurashid)
+- Email: [rashidytamimu@gmail.com](mail to:[rashidytamimu@gmail.com])
 
 ## 🙏 Acknowledgments
 
@@ -172,4 +173,4 @@ If you encounter any issues or have questions, please file an issue on the GitHu
 
 ---
 
-Made with ❤️ and Flutter
+Made with ❤️ by tamimurashid

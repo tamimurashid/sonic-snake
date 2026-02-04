@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/direction.dart';
 import '../models/snake_skin.dart';
+import '../models/obstacle.dart';
 
 class GamePainter extends CustomPainter {
   const GamePainter({
@@ -12,6 +13,7 @@ class GamePainter extends CustomPainter {
     required this.skin,
     required this.direction,
     required this.isBulletTime,
+    required this.obstacles,
   });
 
   final int rows;
@@ -21,6 +23,7 @@ class GamePainter extends CustomPainter {
   final SnakeSkin skin;
   final Direction direction;
   final bool isBulletTime;
+  final List<Obstacle> obstacles;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -29,12 +32,75 @@ class GamePainter extends CustomPainter {
     final double cellWidth = size.width / cols;
     final double cellHeight = size.height / rows;
 
+    _drawObstacles(canvas, cellWidth, cellHeight);
     _drawFood(canvas, cellWidth, cellHeight);
 
     if (skin.symmetry == SnakeSymmetry.laser) {
       _drawLaserSnake(canvas, cellWidth, cellHeight);
     } else {
       _draw3DSphereSnake(canvas, cellWidth, cellHeight);
+    }
+  }
+
+  void _drawObstacles(Canvas canvas, double w, double h) {
+    for (final obstacle in obstacles) {
+      final center = Offset(obstacle.position.y * w + w / 2, obstacle.position.x * h + h / 2);
+      
+      if (obstacle.type == ObstacleType.bomb) {
+        // Draw bomb
+        final bombPaint = Paint()
+          ..shader = RadialGradient(
+            colors: [Colors.red.shade300, Colors.red.shade900],
+            stops: const [0.3, 1.0],
+          ).createShader(Rect.fromCircle(center: center, radius: w * 0.4));
+        
+        canvas.drawCircle(center, w * 0.35, bombPaint);
+        
+        // Fuse
+        final fusePaint = Paint()
+          ..color = Colors.orange
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke;
+        canvas.drawLine(
+          center + Offset(-w * 0.15, -w * 0.3),
+          center + Offset(-w * 0.15, -w * 0.5),
+          fusePaint,
+        );
+      } else {
+        // Draw wall
+        final wallPaint = Paint()
+          ..shader = LinearGradient(
+            colors: [Colors.grey.shade700, Colors.grey.shade900],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ).createShader(Rect.fromLTWH(
+            obstacle.position.y * w,
+            obstacle.position.x * h,
+            w,
+            h,
+          ));
+        
+        final rect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            obstacle.position.y * w + w * 0.05,
+            obstacle.position.x * h + h * 0.05,
+            w * 0.9,
+            h * 0.9,
+          ),
+          Radius.circular(w * 0.1),
+        );
+        
+        canvas.drawRRect(rect, wallPaint);
+        
+        // Border highlight
+        canvas.drawRRect(
+          rect,
+          Paint()
+            ..color = Colors.white.withOpacity(0.2)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+      }
     }
   }
 

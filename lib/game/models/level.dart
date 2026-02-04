@@ -45,20 +45,25 @@ class GameLevel {
     required this.levelNumber,
     required this.threshold,
     required this.tickRate,
+    required this.numObstacles,
   });
 
   final int levelNumber;
   final int threshold; // Points to reach next level
   final Duration tickRate;
+  final int numObstacles; // Number of obstacles for this level
 }
 
 List<GameLevel> generateLevels() {
   return List.generate(20, (i) {
     final level = i + 1;
+    // Progressive obstacle count: 0 for level 1, then increases
+    final obstacles = level == 1 ? 0 : (level - 1) * 2;
     return GameLevel(
       levelNumber: level,
       threshold: level * 100,
       tickRate: Duration(milliseconds: max(60, 200 - (level * 10))),
+      numObstacles: obstacles,
     );
   });
 }

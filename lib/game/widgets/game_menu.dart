@@ -203,7 +203,13 @@ class GameMenu extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Your Coins: $coins', style: const TextStyle(fontSize: 10, color: Colors.amber)),
+            Row(
+              children: [
+                const Icon(Icons.monetization_on, color: Colors.amber, size: 16),
+                const SizedBox(width: 4),
+                Text('$coins', style: const TextStyle(fontSize: 12, color: Colors.amber, fontWeight: FontWeight.bold)),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 8),
