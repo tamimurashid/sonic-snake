@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/level.dart';
 import '../models/snake_skin.dart';
+import '../models/difficulty.dart';
 
 class GameMenu extends StatelessWidget {
   const GameMenu({
@@ -34,6 +35,9 @@ class GameMenu extends StatelessWidget {
     required this.onToggleControls,
     required this.unlockedBoardStyles,
     required this.onUnlockBoardStyle,
+    required this.currentDifficulty,
+    required this.onSelectDifficulty,
+    required this.foodEaten,
   });
 
   final int score;
@@ -62,6 +66,9 @@ class GameMenu extends StatelessWidget {
   final ValueChanged<bool> onToggleControls;
   final List<String> unlockedBoardStyles;
   final Function(String, int) onUnlockBoardStyle;
+  final Difficulty currentDifficulty;
+  final ValueChanged<Difficulty> onSelectDifficulty;
+  final int foodEaten;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +106,14 @@ class GameMenu extends StatelessWidget {
                   const SizedBox(height: 24),
                   _buildSectionTitle('THEMES'),
                   _buildThemeSelector(),
+
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('GAME DIFFICULTY'),
+                  _buildDifficultySelector(),
+
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('COIN HUB'),
+                  _buildCoinProgress(),
 
                   const SizedBox(height: 24),
                   _buildSectionTitle('BOARD STYLE'),
@@ -233,6 +248,108 @@ class GameMenu extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildDifficultySelector() {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: Difficulty.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final diff = Difficulty.values[index];
+          final isSelected = diff == currentDifficulty;
+          Color accent = Colors.blueAccent;
+          if (diff == Difficulty.sonic) accent = Colors.blue;
+          if (diff == Difficulty.insane) accent = Colors.orangeAccent;
+          if (diff == Difficulty.extreme) accent = Colors.pinkAccent;
+
+          return ChoiceChip(
+            label: Text(
+              diff.name.toUpperCase(),
+              style: GoogleFonts.orbitron(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : Colors.white60,
+              ),
+            ),
+            selected: isSelected,
+            onSelected: (_) => onSelectDifficulty(diff),
+            selectedColor: accent,
+            backgroundColor: Colors.white.withOpacity(0.05),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildCoinProgress() {
+    int progress = foodEaten % 10;
+    double percent = progress / 10.0;
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.apple, color: Colors.redAccent, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('CONVERSION', style: GoogleFonts.orbitron(fontSize: 10, color: Colors.white70)),
+                    Text('$progress/10', style: GoogleFonts.orbitron(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: percent,
+                    backgroundColor: Colors.white12,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+                    minHeight: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Icon(Icons.arrow_forward, color: Colors.white24, size: 16),
+          const SizedBox(width: 16),
+          _buildCoinDisplay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoinDisplay() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          const Icon(Icons.monetization_on, color: Colors.amber, size: 20),
+          const SizedBox(width: 4),
+          Text(
+            coins.toString(),
+            style: GoogleFonts.orbitron(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.amber),
+          ),
+        ],
       ),
     );
   }

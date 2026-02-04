@@ -14,9 +14,11 @@ import '../services/user_progress.dart';
 import '../painters/board_painter.dart';
 import '../painters/game_painter.dart';
 import '../models/game_item.dart';
+import '../models/difficulty.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/control_pad.dart';
 import '../widgets/game_menu.dart';
+import '../widgets/music_visualizer.dart';
 
 class SnakeGameScreen extends StatefulWidget {
   const SnakeGameScreen({super.key});
@@ -52,6 +54,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   bool _isBulletTime = false;
   bool _isInvisible = false;
   Timer? _powerUpTimer;
+  Difficulty _difficulty = Difficulty.medium;
+  int _foodEaten = 0;
   final Stopwatch _playtimeStopwatch = Stopwatch();
   
   late GameTheme _currentTheme;
@@ -68,13 +72,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     super.initState();
     _levels = generateLevels();
     _currentTheme = levelThemes[1]!;
+    _resetGame(); // Initialize game state immediately
     _initServices();
-    _resetGame();
   }
 
   Future<void> _initServices() async {
     await _progress.init();
-    await _music.requestPermissions();
+    // Do not request permissions on startup to avoid "Activity Not Found" crashes.
+    // Permissions are requested when user interacts with music controls.
     await _music.fetchSongs();
     
     final savedSkinId = _progress.selectedSkinId;
@@ -84,6 +89,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       _musicPlayerVisible = _progress.musicPlayerVisible;
       _controlsVisible = _progress.controlsVisible;
       _unlockedBoardStyles = _progress.unlockedBoardStyles;
+      _difficulty = Difficulty.values[_progress.difficultyIndex];
     });
   }
 
@@ -99,6 +105,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     _combo = 0;
     _extraLives = 0;
     _coinsEarnedSinceStart = 0;
+    _foodEaten = 0;
     _isInvisible = false;
     _powerUpTimer?.cancel();
     _playtimeStopwatch.reset();
@@ -135,13 +142,15 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
         final rand = _random.nextDouble();
         final playSeconds = _playtimeStopwatch.elapsed.inSeconds;
         
-        // Very rare power-up chance for the second slot
-        if (rand < 0.05 && playSeconds > 120) {
-          return GameItem(position: p, type: ItemType.coin, value: 5);
-        } else if (rand < 0.08 && playSeconds > 180) {
-          return GameItem(position: p, type: ItemType.booster, duration: const Duration(seconds: 5));
-        } else if (rand < 0.10 && playSeconds > 300) {
-          return GameItem(position: p, type: ItemType.lifeSaver, value: 1);
+        // All bonus items (Coins, Boosters, Life Savers) appear after 2 minutes (120s)
+        if (playSeconds > 120) {
+          if (rand < 0.15) {
+            return GameItem(position: p, type: ItemType.coin, value: 5);
+          } else if (rand < 0.25) {
+            return GameItem(position: p, type: ItemType.booster, duration: const Duration(seconds: 5));
+          } else if (rand < 0.30) {
+            return GameItem(position: p, type: ItemType.lifeSaver, value: 1);
+          }
         }
         
         return null; // No power-up this time
@@ -175,8 +184,10 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
 
   void _startTimer() {
     _timer?.cancel();
-    final tickRate = _levels[_currentLevelNum - 1].tickRate;
-    final effectiveRate = _isBulletTime ? tickRate * 2 : tickRate;
+    final baseRate = _levels[_currentLevelNum - 1].tickRate;
+    // Apply difficulty multiplier (Sonic is fastest)
+    final difficultyAdjustedRate = Duration(milliseconds: (baseRate.inMilliseconds / _difficulty.speedMultiplier).round());
+    final effectiveRate = _isBulletTime ? difficultyAdjustedRate * 2 : difficultyAdjustedRate;
     _timer = Timer.periodic(effectiveRate, (_) => _tick());
   }
 
@@ -239,6 +250,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       case ItemType.food:
         _score += 10;
         _combo++;
+        _foodEaten++;
+        
+        // 10 Food = 1 Coin logic
+        if (_foodEaten % 10 == 0) {
+          _progress.addCoins(1);
+          _coinsEarnedSinceStart += 1;
+        }
+
         // Bullet Time Trigger
         if (_combo >= 10 && !_isBulletTime) {
           _triggerBulletTime();
@@ -247,6 +266,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       case ItemType.coin:
         _score += 5;
         _progress.addCoins(item.value);
+        _coinsEarnedSinceStart += item.value;
         break;
       case ItemType.booster:
         _activateBooster(item.duration ?? const Duration(seconds: 5));
@@ -374,6 +394,12 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
             ),
           ).animate(target: _isBulletTime ? 1 : 0).tint(color: Colors.white, end: 0.2),
           
+          // Music Visualizer (Background Particles)
+          MusicVisualizer(
+            isPlaying: _music.isPlaying,
+            color: _currentTheme.accentColor,
+          ),
+
           SafeArea(
             child: Column(
               children: [
@@ -479,7 +505,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   Widget _buildGameBoard() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = math.min(constraints.maxWidth, constraints.maxHeight) - 10;
+        final size = (math.min(constraints.maxWidth, constraints.maxHeight) - 10).clamp(0.0, double.infinity);
         return Center(
           child: Container(
             width: size,
@@ -584,6 +610,16 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
           HapticFeedback.heavyImpact();
         }
       },
+      currentDifficulty: _difficulty,
+      onSelectDifficulty: (diff) async {
+        setState(() {
+          _difficulty = diff;
+        });
+        await _progress.setDifficultyIndex(diff.index);
+        _startTimer();
+        HapticFeedback.selectionClick();
+      },
+      foodEaten: _foodEaten,
       onToggleControls: (visible) async {
         await _progress.setControlsVisible(visible);
         setState(() => _controlsVisible = visible);
@@ -617,10 +653,18 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       },
       onToggleSound: (v) {},
       onToggleMusic: (v) async {
-        v ? await _music.resume() : await _music.pause();
+        if (v) {
+           await _music.requestPermissions();
+           await _music.fetchSongs(); 
+           await _music.resume();
+        } else {
+           await _music.pause();
+        }
         setState(() {});
       },
       onPickMusic: () async {
+        await _music.requestPermissions();
+        await _music.fetchSongs();
         await _music.next();
         setState(() {});
       },

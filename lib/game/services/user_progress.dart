@@ -8,6 +8,7 @@ class UserProgress {
   static const String _keyMusicPlayerVisible = 'music_player_visible';
   static const String _keyControlsVisible = 'controls_visible';
   static const String _keyUnlockedBoardStyles = 'unlocked_board_styles';
+  static const String _keyDifficulty = 'game_difficulty';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
@@ -98,4 +99,11 @@ class UserProgress {
   }
 
   bool isBoardStyleUnlocked(String styleId) => unlockedBoardStyles.contains(styleId);
+
+  int get difficultyIndex => _isInitialized ? (_prefs?.getInt(_keyDifficulty) ?? 1) : 1;
+
+  Future<void> setDifficultyIndex(int index) async {
+    if (!_isInitialized) return;
+    await _prefs!.setInt(_keyDifficulty, index);
+  }
 }
