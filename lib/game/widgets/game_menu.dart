@@ -137,7 +137,7 @@ class GameMenu extends StatelessWidget {
                           const Icon(Icons.power_settings_new, size: 20),
                           const SizedBox(width: 12),
                           Text(
-                            'INITIALIZE CORE',
+                            'QUICK START',
                             style: GoogleFonts.orbitron(
                               fontSize: 16,
                               fontWeight: FontWeight.w900,

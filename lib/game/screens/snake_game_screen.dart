@@ -13,6 +13,7 @@ import '../services/music_manager.dart';
 import '../services/user_progress.dart';
 import '../painters/board_painter.dart';
 import '../painters/game_painter.dart';
+import '../models/game_item.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/control_pad.dart';
 import '../widgets/game_menu.dart';
@@ -34,7 +35,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   Timer? _timer;
 
   List<math.Point<int>> _snake = [];
-  math.Point<int> _food = const math.Point<int>(0, 0);
+  List<GameItem> _items = [];
   List<Obstacle> _obstacles = [];
   
   Direction _direction = Direction.right;
@@ -45,8 +46,13 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   bool _showMenu = true;
   int _score = 0;
   int _combo = 0;
+  int _coinsEarnedSinceStart = 0;
+  int _extraLives = 0;
   int _currentLevelNum = 1;
   bool _isBulletTime = false;
+  bool _isInvisible = false;
+  Timer? _powerUpTimer;
+  final Stopwatch _playtimeStopwatch = Stopwatch();
   
   late GameTheme _currentTheme;
   late List<GameLevel> _levels;
@@ -91,6 +97,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     _timer?.cancel();
     _score = 0;
     _combo = 0;
+    _extraLives = 0;
+    _coinsEarnedSinceStart = 0;
+    _isInvisible = false;
+    _powerUpTimer?.cancel();
+    _playtimeStopwatch.reset();
     _currentLevelNum = 1;
     _isGameOver = false;
     _isRunning = false;
@@ -107,14 +118,50 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     ];
     
     _obstacles = [];
-    _food = _spawnItem();
+    _items = [];
+    // Spawn 3 items initially
+    for (int i = 0; i < 3; i++) {
+      _items.add(_spawnItem());
+    }
     setState(() {});
   }
 
-  math.Point<int> _spawnItem() {
+  GameItem _spawnItem() {
     while (true) {
       final p = math.Point(_random.nextInt(_rows), _random.nextInt(_cols));
-      if (!_snake.contains(p)) return p;
+      if (!_snake.contains(p) && !_items.any((item) => item.position == p) && !_obstacles.any((o) => o.position == p)) {
+        // Randomly pick item type
+        final rand = _random.nextDouble();
+        ItemType type = ItemType.food;
+        int value = 0;
+        Duration? duration;
+
+        // Rarity Logic: 
+        // 1. Food is always available (80% default)
+        // 2. Premium items only appear after 3 minutes of play (gradual unlocking)
+        final playSeconds = _playtimeStopwatch.elapsed.inSeconds;
+        
+        if (playSeconds < 60) {
+          // First minute: 100% Food
+          type = ItemType.food;
+        } else {
+          // After 1 min, start showing coins rarely
+          if (rand < 0.15 && playSeconds > 120) {
+            type = ItemType.coin;
+            value = 5;
+          } else if (rand < 0.25 && playSeconds > 180) { // After 3 mins, show boosters
+            type = ItemType.booster;
+            duration = const Duration(seconds: 5);
+          } else if (rand < 0.30 && playSeconds > 300) { // After 5 mins, show life savers
+            type = ItemType.lifeSaver;
+            value = 1;
+          } else {
+            type = ItemType.food;
+          }
+        }
+
+        return GameItem(position: p, type: type, value: value, duration: duration);
+      }
     }
   }
 
@@ -130,6 +177,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     _isRunning = true;
     _showMenu = false;
     _showGestureGuide = !_progress.controlsVisible; // Show guide if buttons are hidden
+    _playtimeStopwatch.start();
     _startTimer();
     setState(() {});
     
@@ -150,6 +198,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   void _pauseGame() {
     _isRunning = false;
     _timer?.cancel();
+    _playtimeStopwatch.stop();
     setState(() {});
   }
 
@@ -161,14 +210,27 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     final nextHead = _nextPosition(head, _direction);
 
     if (_isCollision(nextHead)) {
+      if (_extraLives > 0) {
+        setState(() => _extraLives--);
+        HapticFeedback.heavyImpact();
+        return; 
+      }
       _handleGameOver();
+      _playtimeStopwatch.stop();
       return;
     }
 
     _snake.insert(0, nextHead);
 
-    if (nextHead == _food) {
-      _handleEat();
+    // Check collision with any item
+    int itemIndex = _items.indexWhere((item) => item.position == nextHead);
+    if (itemIndex != -1) {
+      _handleItemCollection(_items[itemIndex]);
+      _items.removeAt(itemIndex);
+      // Ensure at least 3 items are always present
+      while (_items.length < 3) {
+        _items.add(_spawnItem());
+      }
     } else {
       _snake.removeLast();
     }
@@ -176,18 +238,28 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     setState(() {});
   }
 
-  void _handleEat() {
-    _score += 10;
-    _combo++;
-    _food = _spawnItem();
+  void _handleItemCollection(GameItem item) {
     HapticFeedback.mediumImpact();
-
-    // Economic increment
-    if (_score % 50 == 0) _progress.addCoins(1);
-
-    // Bullet Time Trigger
-    if (_combo >= 10 && !_isBulletTime) {
-      _triggerBulletTime();
+    
+    switch (item.type) {
+      case ItemType.food:
+        _score += 10;
+        _combo++;
+        // Bullet Time Trigger
+        if (_combo >= 10 && !_isBulletTime) {
+          _triggerBulletTime();
+        }
+        break;
+      case ItemType.coin:
+        _score += 5;
+        _progress.addCoins(item.value);
+        break;
+      case ItemType.booster:
+        _activateBooster(item.duration ?? const Duration(seconds: 5));
+        break;
+      case ItemType.lifeSaver:
+        setState(() => _extraLives += item.value);
+        break;
     }
 
     // Level up logic
@@ -195,6 +267,16 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       _levelUp();
     }
   }
+
+  void _activateBooster(Duration duration) {
+    _powerUpTimer?.cancel();
+    setState(() => _isInvisible = true);
+    _powerUpTimer = Timer(duration, () {
+      if (mounted) setState(() => _isInvisible = false);
+    });
+  }
+
+  // Removed _handleEat as it's replaced by _handleItemCollection
 
   void _triggerBulletTime() {
     setState(() => _isBulletTime = true);
@@ -231,7 +313,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
         math.Point<int> obstaclePos;
         do {
           obstaclePos = math.Point(_random.nextInt(_rows), _random.nextInt(_cols));
-        } while (_snake.contains(obstaclePos) || obstaclePos == _food || _obstacles.any((o) => o.position == obstaclePos));
+        } while (_snake.contains(obstaclePos) || 
+                 _items.any((item) => item.position == obstaclePos) || 
+                 _obstacles.any((o) => o.position == obstaclePos));
         _obstacles.add(Obstacle(position: obstaclePos));
       }
     }
@@ -351,13 +435,17 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
             scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                StatCard(label: 'Score', value: _score.toString(), color: _currentTheme.accentColor),
-                const SizedBox(width: 8),
-                StatCard(label: 'Level', value: _currentLevelNum.toString(), color: Colors.amber),
-                const SizedBox(width: 8),
-                StatCard(label: 'Coins', value: _progress.coins.toString(), color: Colors.amberAccent),
-              ],
+                    children: [
+                      StatCard(label: 'Score', value: _score.toString(), color: _currentTheme.accentColor),
+                      const SizedBox(width: 8),
+                      StatCard(label: 'Level', value: _currentLevelNum.toString(), color: Colors.amber),
+                      const SizedBox(width: 8),
+                      StatCard(label: 'Coins', value: _progress.coins.toString(), color: Colors.amberAccent),
+                      if (_extraLives > 0) ...[
+                        const SizedBox(width: 8),
+                        StatCard(label: 'Lives', value: _extraLives.toString(), color: Colors.redAccent),
+                      ],
+                    ],
             ),
           ),
           const SizedBox(height: 10),
@@ -436,15 +524,16 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                     ),
                     CustomPaint(
                       painter: GamePainter(
-                        rows: _rows,
-                        cols: _cols,
-                        snake: _snake,
-                        food: _food,
-                        skin: _currentSkin,
-                        direction: _direction,
-                        isBulletTime: _isBulletTime,
-                        obstacles: _obstacles,
-                      ),
+                  rows: _rows,
+                  cols: _cols,
+                  snake: _snake,
+                  items: _items,
+                  skin: _currentSkin,
+                  direction: _direction,
+                  isBulletTime: _isBulletTime,
+                  isInvisible: _isInvisible,
+                  obstacles: _obstacles,
+                ),
                       size: Size(size, size),
                     ),
                     if (_isGameOver) _buildGameOverOverlay(),
