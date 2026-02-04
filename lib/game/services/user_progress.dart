@@ -6,6 +6,8 @@ class UserProgress {
   static const String _keySelectedSkin = 'selected_skin';
   static const String _keyBoardStyle = 'board_style';
   static const String _keyMusicPlayerVisible = 'music_player_visible';
+  static const String _keyControlsVisible = 'controls_visible';
+  static const String _keyUnlockedBoardStyles = 'unlocked_board_styles';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
@@ -72,4 +74,28 @@ class UserProgress {
     if (!_isInitialized) return;
     await _prefs!.setBool(_keyMusicPlayerVisible, visible);
   }
+
+  bool get controlsVisible => _isInitialized 
+      ? (_prefs?.getBool(_keyControlsVisible) ?? false) 
+      : false;
+
+  Future<void> setControlsVisible(bool visible) async {
+    if (!_isInitialized) return;
+    await _prefs!.setBool(_keyControlsVisible, visible);
+  }
+
+  List<String> get unlockedBoardStyles => _isInitialized 
+      ? (_prefs?.getStringList(_keyUnlockedBoardStyles) ?? ['cyber', 'neon', 'matrix', 'classic', 'style5', 'style6', 'style7', 'style8', 'style9', 'style10']) 
+      : ['cyber', 'neon', 'matrix', 'classic', 'style5', 'style6', 'style7', 'style8', 'style9', 'style10'];
+
+  Future<void> unlockBoardStyle(String styleId) async {
+    if (!_isInitialized) return;
+    final styles = unlockedBoardStyles;
+    if (!styles.contains(styleId)) {
+      styles.add(styleId);
+      await _prefs!.setStringList(_keyUnlockedBoardStyles, styles);
+    }
+  }
+
+  bool isBoardStyleUnlocked(String styleId) => unlockedBoardStyles.contains(styleId);
 }

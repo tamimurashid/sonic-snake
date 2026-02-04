@@ -30,6 +30,10 @@ class GameMenu extends StatelessWidget {
     required this.onSelectBoardStyle,
     required this.musicPlayerVisible,
     required this.onToggleMusicPlayer,
+    required this.controlsVisible,
+    required this.onToggleControls,
+    required this.unlockedBoardStyles,
+    required this.onUnlockBoardStyle,
   });
 
   final int score;
@@ -54,6 +58,10 @@ class GameMenu extends StatelessWidget {
   final ValueChanged<String> onSelectBoardStyle;
   final bool musicPlayerVisible;
   final ValueChanged<bool> onToggleMusicPlayer;
+  final bool controlsVisible;
+  final ValueChanged<bool> onToggleControls;
+  final List<String> unlockedBoardStyles;
+  final Function(String, int) onUnlockBoardStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -103,7 +111,11 @@ class GameMenu extends StatelessWidget {
                   const SizedBox(height: 24),
                   _buildSectionTitle('AUDIO CENTER'),
                   _buildAudioController(),
-                  _buildMusicVisibilityToggle(),
+                  _buildHUDToggles(),
+
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('ABOUT SYSTEM'),
+                  _buildAboutSection(),
 
                   const SizedBox(height: 40),
                   SizedBox(
@@ -227,10 +239,19 @@ class GameMenu extends StatelessWidget {
 
   Widget _buildBoardStyleSelector() {
     final styles = [
-      {'id': 'cyber', 'label': 'CYBER GRID', 'icon': Icons.grid_4x4},
-      {'id': 'neon', 'label': 'NEON GLOW', 'icon': Icons.light_mode},
-      {'id': 'matrix', 'label': 'MATRIX BIT', 'icon': Icons.code},
-      {'id': 'classic', 'label': 'LEGACY', 'icon': Icons.grid_on},
+      {'id': 'cyber', 'label': 'CYBER GRID', 'icon': Icons.grid_4x4, 'price': 0},
+      {'id': 'neon', 'label': 'NEON GLOW', 'icon': Icons.light_mode, 'price': 0},
+      {'id': 'matrix', 'label': 'MATRIX BIT', 'icon': Icons.code, 'price': 0},
+      {'id': 'classic', 'label': 'LEGACY', 'icon': Icons.grid_on, 'price': 0},
+      // Virtual styles to demonstrate 11+ logic
+      {'id': 'style5', 'label': 'STYLE V5', 'icon': Icons.style, 'price': 0},
+      {'id': 'style6', 'label': 'STYLE V6', 'icon': Icons.style, 'price': 0},
+      {'id': 'style7', 'label': 'STYLE V7', 'icon': Icons.style, 'price': 0},
+      {'id': 'style8', 'label': 'STYLE V8', 'icon': Icons.style, 'price': 0},
+      {'id': 'style9', 'label': 'STYLE V9', 'icon': Icons.style, 'price': 0},
+      {'id': 'style10', 'label': 'STYLE V10', 'icon': Icons.style, 'price': 0},
+      {'id': 'nebula', 'label': 'NEBULA', 'icon': Icons.nights_stay, 'price': 200},
+      {'id': 'lava', 'label': 'LAVA', 'icon': Icons.whatshot, 'price': 300},
     ];
     return SizedBox(
       height: 45,
@@ -240,13 +261,25 @@ class GameMenu extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final s = styles[index];
-          final isSelected = s['id'] == currentBoardStyle;
+          final id = s['id'] as String;
+          final isSelected = id == currentBoardStyle;
+          final isUnlocked = unlockedBoardStyles.contains(id);
+          final price = s['price'] as int;
+
           return ChoiceChip(
-            avatar: Icon(s['icon'] as IconData, size: 14, color: isSelected ? Colors.white : Colors.white60),
-            label: Text(s['label'] as String),
+            avatar: isUnlocked 
+                ? Icon(s['icon'] as IconData, size: 14, color: isSelected ? Colors.white : Colors.white60)
+                : const Icon(Icons.lock, size: 14, color: Colors.amber),
+            label: Text("${s['label']} ${!isUnlocked ? '($price)' : ''}"),
             labelStyle: GoogleFonts.orbitron(fontSize: 8, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.white60),
             selected: isSelected,
-            onSelected: (_) => onSelectBoardStyle(s['id'] as String),
+            onSelected: (_) {
+              if (isUnlocked) {
+                onSelectBoardStyle(id);
+              } else {
+                onUnlockBoardStyle(id, price);
+              }
+            },
             selectedColor: Colors.blueAccent,
             backgroundColor: Colors.white.withOpacity(0.05),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -376,20 +409,60 @@ class GameMenu extends StatelessWidget {
     );
   }
 
-  Widget _buildMusicVisibilityToggle() {
+  Widget _buildHUDToggles() {
+    return Column(
+      children: [
+        _buildToggleRow('HUD MUSIC PLAYER', musicPlayerVisible, onToggleMusicPlayer),
+        _buildToggleRow('HUD CONTROL BUTTONS', controlsVisible, onToggleControls),
+      ],
+    );
+  }
+
+  Widget _buildToggleRow(String label, bool value, ValueChanged<bool> onChanged) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(top: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'HUD MUSIC PLAYER',
+            label,
             style: GoogleFonts.orbitron(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white38),
           ),
           Switch.adaptive(
-            value: musicPlayerVisible,
-            onChanged: onToggleMusicPlayer,
+            value: value,
+            onChanged: onChanged,
             activeColor: Colors.blueAccent,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'SONIC SNAKE v1.0',
+            style: GoogleFonts.orbitron(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Made with ❤️ by smartfy studio game',
+            style: GoogleFonts.inter(fontSize: 10, color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Experience the gravity-defying evolution of a classic.',
+            style: TextStyle(fontSize: 8, color: Colors.white38, fontStyle: FontStyle.italic),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

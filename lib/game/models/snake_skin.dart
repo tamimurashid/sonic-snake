@@ -40,7 +40,7 @@ const List<SnakeSkin> snakeSkins = <SnakeSkin>[
     headColor: Color(0xFFFFD700),
     bodyColor: Color(0xFFDAA520),
     glowColor: Color(0xFFFFE135),
-    price: 500,
+    price: 100,
   ),
   SnakeSkin(
     id: 'rainbow',
@@ -48,7 +48,7 @@ const List<SnakeSkin> snakeSkins = <SnakeSkin>[
     headColor: Color(0xFFE91E63),
     bodyColor: Color(0xFF2196F3),
     trailEffect: true,
-    price: 1000,
+    price: 250,
   ),
   SnakeSkin(
     id: 'ghost',
@@ -56,7 +56,7 @@ const List<SnakeSkin> snakeSkins = <SnakeSkin>[
     headColor: Color(0xAAFFFFFF),
     bodyColor: Color(0x66FFFFFF),
     symmetry: SnakeSymmetry.laser,
-    price: 1500,
+    price: 500,
   ),
   SnakeSkin(
     id: 'laser',
@@ -65,6 +65,6 @@ const List<SnakeSkin> snakeSkins = <SnakeSkin>[
     bodyColor: Color(0xFF00FF88),
     symmetry: SnakeSymmetry.laser,
     glowColor: Color(0xFF00FFF2),
-    price: 2000,
+    price: 1000,
   ),
 ];

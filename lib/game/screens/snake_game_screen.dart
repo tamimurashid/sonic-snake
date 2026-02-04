@@ -53,6 +53,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   SnakeSkin _currentSkin = snakeSkins.first;
   String _currentBoardStyle = 'cyber';
   bool _musicPlayerVisible = true;
+  bool _controlsVisible = false;
+  List<String> _unlockedBoardStyles = [];
+  bool _showGestureGuide = false;
 
   @override
   void initState() {
@@ -73,6 +76,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       _currentSkin = snakeSkins.firstWhere((s) => s.id == savedSkinId);
       _currentBoardStyle = _progress.boardStyle;
       _musicPlayerVisible = _progress.musicPlayerVisible;
+      _controlsVisible = _progress.controlsVisible;
+      _unlockedBoardStyles = _progress.unlockedBoardStyles;
     });
   }
 
@@ -124,8 +129,15 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     }
     _isRunning = true;
     _showMenu = false;
+    _showGestureGuide = !_progress.controlsVisible; // Show guide if buttons are hidden
     _startTimer();
     setState(() {});
+    
+    if (_showGestureGuide) {
+      Future.delayed(2.seconds, () {
+        if (mounted) setState(() => _showGestureGuide = false);
+      });
+    }
   }
 
   void _startTimer() {
@@ -289,20 +301,50 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
               children: [
                 _buildHeader(),
                 Expanded(child: _buildGameBoard()),
-                _buildControls(),
+                _buildHUDControls(),
               ],
             ),
           ),
           
+          if (_showGestureGuide) _buildGestureGuide(),
           if (_showMenu) _buildMenuOverlay(),
         ],
       ),
     );
   }
 
+  Widget _buildGestureGuide() {
+    return Positioned.fill(
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.4),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.swipe, color: Colors.blueAccent, size: 48),
+              const SizedBox(height: 16),
+              Text(
+                'SWIPE TO CONTROL',
+                style: GoogleFonts.orbitron(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              const Text(
+                'Up, Down, Left, Right',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ).animate().fadeIn().scale().fadeOut(delay: 1.5.seconds),
+    );
+  }
+
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Column(
         children: [
           SingleChildScrollView(
@@ -448,6 +490,21 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       coins: _progress.coins,
       currentBoardStyle: _currentBoardStyle,
       musicPlayerVisible: _musicPlayerVisible,
+      controlsVisible: _controlsVisible,
+      unlockedBoardStyles: _unlockedBoardStyles,
+      onUnlockBoardStyle: (styleId, price) async {
+        if (await _progress.spendCoins(price)) {
+          await _progress.unlockBoardStyle(styleId);
+          setState(() => _unlockedBoardStyles = _progress.unlockedBoardStyles);
+          HapticFeedback.mediumImpact();
+        } else {
+          HapticFeedback.heavyImpact();
+        }
+      },
+      onToggleControls: (visible) async {
+        await _progress.setControlsVisible(visible);
+        setState(() => _controlsVisible = visible);
+      },
       onSelectBoardStyle: (style) async {
         await _progress.setBoardStyle(style);
         setState(() => _currentBoardStyle = style);
@@ -496,23 +553,29 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildHUDControls() {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // Music Player Bar
+        // Music Player Bar (Independent)
         if (_musicPlayerVisible) _buildMusicPlayer(),
-        const SizedBox(height: 16),
-        // Centered Control Pad with side buttons
+        
         Padding(
-          padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+          padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20, top: 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Settings button
+              // Settings button (Independent)
               _buildModernSettingsButton(),
-              // Centered Control Pad
-              ControlPad(onDirection: _queueDirection),
-              // Play/Pause button
+              
+              // Centered Control Pad (Conditional)
+              if (_controlsVisible) 
+                ControlPad(onDirection: _queueDirection)
+              else
+                const SizedBox(height: 120), // Spacer to keep height consistent
+              
+              // Play/Pause button (Independent)
               _buildModernPlayButton(),
             ],
           ),
@@ -524,7 +587,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   Widget _buildModernSettingsButton() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(0.1)),
       ),
@@ -532,6 +595,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
         onPressed: () => setState(() => _showMenu = true),
         icon: const Icon(Icons.settings, color: Colors.white, size: 28),
         padding: const EdgeInsets.all(16),
+        constraints: const BoxConstraints(),
       ),
     ).animate().scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 400.ms, curve: Curves.easeOutBack);
   }
