@@ -4,6 +4,8 @@ class UserProgress {
   static const String _keyCoins = 'sonic_coins';
   static const String _keyUnlockedSkins = 'unlocked_skins';
   static const String _keySelectedSkin = 'selected_skin';
+  static const String _keyBoardStyle = 'board_style';
+  static const String _keyMusicPlayerVisible = 'music_player_visible';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
@@ -51,5 +53,23 @@ class UserProgress {
   Future<void> setSelectedSkin(String skinId) async {
     if (!_isInitialized) return;
     await _prefs!.setString(_keySelectedSkin, skinId);
+  }
+
+  String get boardStyle => _isInitialized 
+      ? (_prefs?.getString(_keyBoardStyle) ?? 'cyber') 
+      : 'cyber';
+
+  Future<void> setBoardStyle(String style) async {
+    if (!_isInitialized) return;
+    await _prefs!.setString(_keyBoardStyle, style);
+  }
+
+  bool get musicPlayerVisible => _isInitialized 
+      ? (_prefs?.getBool(_keyMusicPlayerVisible) ?? true) 
+      : true;
+
+  Future<void> setMusicPlayerVisible(bool visible) async {
+    if (!_isInitialized) return;
+    await _prefs!.setBool(_keyMusicPlayerVisible, visible);
   }
 }

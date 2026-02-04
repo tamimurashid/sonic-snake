@@ -26,6 +26,10 @@ class GameMenu extends StatelessWidget {
     required this.onStart,
     required this.unlockedSkins,
     required this.coins,
+    required this.currentBoardStyle,
+    required this.onSelectBoardStyle,
+    required this.musicPlayerVisible,
+    required this.onToggleMusicPlayer,
   });
 
   final int score;
@@ -46,6 +50,10 @@ class GameMenu extends StatelessWidget {
   final VoidCallback onStart;
   final List<String> unlockedSkins;
   final int coins;
+  final String currentBoardStyle;
+  final ValueChanged<String> onSelectBoardStyle;
+  final bool musicPlayerVisible;
+  final ValueChanged<bool> onToggleMusicPlayer;
 
   @override
   Widget build(BuildContext context) {
@@ -85,12 +93,17 @@ class GameMenu extends StatelessWidget {
                   _buildThemeSelector(),
 
                   const SizedBox(height: 24),
+                  _buildSectionTitle('BOARD STYLE'),
+                  _buildBoardStyleSelector(),
+
+                  const SizedBox(height: 24),
                   _buildSectionTitle('SKIN SHOP'),
                   _buildSkinGrid(),
 
                   const SizedBox(height: 24),
                   _buildSectionTitle('AUDIO CENTER'),
                   _buildAudioController(),
+                  _buildMusicVisibilityToggle(),
 
                   const SizedBox(height: 40),
                   SizedBox(
@@ -103,11 +116,26 @@ class GameMenu extends StatelessWidget {
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 10,
-                        shadowColor: Colors.blueAccent,
+                        shadowColor: Colors.blueAccent.withOpacity(0.5),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
-                      child: Text('INITIALIZE CORE', style: GoogleFonts.orbitron(fontWeight: FontWeight.bold)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.power_settings_new, size: 20),
+                          const SizedBox(width: 12),
+                          Text(
+                            'INITIALIZE CORE',
+                            style: GoogleFonts.orbitron(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ).animate().scale(delay: 200.ms),
+                  ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(duration: 3.seconds, color: Colors.white24).scale(begin: const Offset(1, 1), end: const Offset(1.02, 1.02), duration: 1.seconds),
                 ],
               ),
             ),
@@ -191,6 +219,37 @@ class GameMenu extends StatelessWidget {
                 ],
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBoardStyleSelector() {
+    final styles = [
+      {'id': 'cyber', 'label': 'CYBER GRID', 'icon': Icons.grid_4x4},
+      {'id': 'neon', 'label': 'NEON GLOW', 'icon': Icons.light_mode},
+      {'id': 'matrix', 'label': 'MATRIX BIT', 'icon': Icons.code},
+      {'id': 'classic', 'label': 'LEGACY', 'icon': Icons.grid_on},
+    ];
+    return SizedBox(
+      height: 45,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: styles.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final s = styles[index];
+          final isSelected = s['id'] == currentBoardStyle;
+          return ChoiceChip(
+            avatar: Icon(s['icon'] as IconData, size: 14, color: isSelected ? Colors.white : Colors.white60),
+            label: Text(s['label'] as String),
+            labelStyle: GoogleFonts.orbitron(fontSize: 8, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : Colors.white60),
+            selected: isSelected,
+            onSelected: (_) => onSelectBoardStyle(s['id'] as String),
+            selectedColor: Colors.blueAccent,
+            backgroundColor: Colors.white.withOpacity(0.05),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           );
         },
       ),
@@ -311,6 +370,26 @@ class GameMenu extends StatelessWidget {
               IconButton(onPressed: onPickMusic, icon: const Icon(Icons.library_music, color: Colors.blueAccent)),
               IconButton(onPressed: onNextTrack, icon: const Icon(Icons.skip_next, color: Colors.white70)),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMusicVisibilityToggle() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'HUD MUSIC PLAYER',
+            style: GoogleFonts.orbitron(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white38),
+          ),
+          Switch.adaptive(
+            value: musicPlayerVisible,
+            onChanged: onToggleMusicPlayer,
+            activeColor: Colors.blueAccent,
           ),
         ],
       ),

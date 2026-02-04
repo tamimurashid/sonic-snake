@@ -51,6 +51,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   late GameTheme _currentTheme;
   late List<GameLevel> _levels;
   SnakeSkin _currentSkin = snakeSkins.first;
+  String _currentBoardStyle = 'cyber';
+  bool _musicPlayerVisible = true;
 
   @override
   void initState() {
@@ -69,6 +71,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     final savedSkinId = _progress.selectedSkinId;
     setState(() {
       _currentSkin = snakeSkins.firstWhere((s) => s.id == savedSkinId);
+      _currentBoardStyle = _progress.boardStyle;
+      _musicPlayerVisible = _progress.musicPlayerVisible;
     });
   }
 
@@ -315,7 +319,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
             ),
           ),
           const SizedBox(height: 10),
-          _buildMusicBar(),
+          if (_musicPlayerVisible) _buildMusicBar(),
         ],
       ),
     );
@@ -351,7 +355,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   Widget _buildGameBoard() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = math.min(constraints.maxWidth, constraints.maxHeight) - 30;
+        final size = math.min(constraints.maxWidth, constraints.maxHeight) - 10;
         return Center(
           child: Container(
             width: size,
@@ -360,7 +364,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
               color: _currentTheme.boardColor.withOpacity(0.8),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
-                BoxShadow(color: _currentTheme.accentColor.withOpacity(0.2), blurRadius: 40, spreadRadius: -10),
+                BoxShadow(color: _currentTheme.accentColor.withOpacity(0.3), blurRadius: 60, spreadRadius: -10),
+                BoxShadow(color: Colors.white.withOpacity(0.05), blurRadius: 10, offset: const Offset(5, 5)),
               ],
             ),
             child: ClipRRect(
@@ -383,6 +388,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                         cols: _cols, 
                         gridColor: _currentTheme.gridColor,
                         accentColor: _currentTheme.accentColor,
+                        style: _currentBoardStyle,
                       ),
                       size: Size(size, size),
                     ),
@@ -440,6 +446,16 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       musicName: _music.currentTrack?.title,
       unlockedSkins: _progress.unlockedSkins,
       coins: _progress.coins,
+      currentBoardStyle: _currentBoardStyle,
+      musicPlayerVisible: _musicPlayerVisible,
+      onSelectBoardStyle: (style) async {
+        await _progress.setBoardStyle(style);
+        setState(() => _currentBoardStyle = style);
+      },
+      onToggleMusicPlayer: (visible) async {
+        await _progress.setMusicPlayerVisible(visible);
+        setState(() => _musicPlayerVisible = visible);
+      },
       onSelectLevel: (l) => setState(() => _currentLevelNum = l.levelNumber),
       onSelectTheme: (theme) {
         setState(() => _currentTheme = theme);
@@ -484,7 +500,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
     return Column(
       children: [
         // Music Player Bar
-        _buildMusicPlayer(),
+        if (_musicPlayerVisible) _buildMusicPlayer(),
         const SizedBox(height: 16),
         // Centered Control Pad with side buttons
         Padding(
@@ -493,29 +509,61 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Settings button
-              IconButton.outlined(
-                onPressed: () => setState(() => _showMenu = true),
-                icon: const Icon(Icons.settings, color: Colors.white70, size: 28),
-                style: IconButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                ),
-              ),
+              _buildModernSettingsButton(),
               // Centered Control Pad
               ControlPad(onDirection: _queueDirection),
               // Play/Pause button
-              IconButton.filled(
-                onPressed: _isRunning ? _pauseGame : _startGame,
-                icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow, size: 32),
-                style: IconButton.styleFrom(
-                  backgroundColor: _currentTheme.accentColor,
-                  padding: const EdgeInsets.all(16),
-                ),
-              ),
+              _buildModernPlayButton(),
             ],
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildModernSettingsButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: IconButton(
+        onPressed: () => setState(() => _showMenu = true),
+        icon: const Icon(Icons.settings, color: Colors.white, size: 28),
+        padding: const EdgeInsets.all(16),
+      ),
+    ).animate().scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 400.ms, curve: Curves.easeOutBack);
+  }
+
+  Widget _buildModernPlayButton() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _currentTheme.accentColor,
+            _currentTheme.accentColor.withOpacity(0.7),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: _currentTheme.accentColor.withOpacity(0.4),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: IconButton(
+        onPressed: _isRunning ? _pauseGame : _startGame,
+        icon: Icon(
+          _isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          size: 36,
+          color: Colors.white,
+        ),
+        padding: const EdgeInsets.all(12),
+      ),
+    ).animate(target: _isRunning ? 1 : 0).shimmer(duration: 2.seconds).scale(begin: const Offset(1, 1), end: const Offset(1.1, 1.1), duration: 200.ms);
   }
 
   Widget _buildMusicPlayer() {
