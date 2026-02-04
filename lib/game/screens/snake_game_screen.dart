@@ -445,14 +445,28 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   }
 
   Widget _buildControls() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 30, left: 30, right: 30),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          ControlPad(onDirection: _queueDirection),
-          Column(
+    return Column(
+      children: [
+        // Music Player Bar
+        _buildMusicPlayer(),
+        const SizedBox(height: 16),
+        // Centered Control Pad with side buttons
+        Padding(
+          padding: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Settings button
+              IconButton.outlined(
+                onPressed: () => setState(() => _showMenu = true),
+                icon: const Icon(Icons.settings, color: Colors.white70, size: 28),
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+              // Centered Control Pad
+              ControlPad(onDirection: _queueDirection),
+              // Play/Pause button
               IconButton.filled(
                 onPressed: _isRunning ? _pauseGame : _startGame,
                 icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow, size: 32),
@@ -461,14 +475,228 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                   padding: const EdgeInsets.all(16),
                 ),
               ),
-              const SizedBox(height: 12),
-              IconButton.outlined(
-                onPressed: () => setState(() => _showMenu = true),
-                icon: const Icon(Icons.settings, color: Colors.white70),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMusicPlayer() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          // Album art placeholder
+          Container(
+            width: 45,
+            height: 45,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              gradient: LinearGradient(
+                colors: [Colors.blueAccent, Colors.purpleAccent],
+              ),
+            ),
+            child: const Icon(Icons.music_note, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          // Track info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _music.currentTrack?.title ?? "No Track",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _music.currentTrack?.artist ?? "Select Music",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 11,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          // Music controls
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: () async {
+                  await _music.prev();
+                  setState(() {});
+                },
+                icon: const Icon(Icons.skip_previous, color: Colors.white70, size: 24),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () async {
+                  _music.isPlaying ? await _music.pause() : await _music.resume();
+                  setState(() {});
+                },
+                icon: Icon(
+                  _music.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                  color: Colors.blueAccent,
+                  size: 36,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () async {
+                  await _music.next();
+                  setState(() {});
+                },
+                icon: const Icon(Icons.skip_next, color: Colors.white70, size: 24),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: _showMusicPlaylist,
+                icon: const Icon(Icons.queue_music, color: Colors.white70, size: 24),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showMusicPlaylist() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Icon(Icons.queue_music, color: Colors.blueAccent),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Music Playlist',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white10, height: 1),
+            Flexible(
+              child: _music.songs.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.music_off, size: 48, color: Colors.white24),
+                          SizedBox(height: 16),
+                          Text(
+                            'No music found',
+                            style: TextStyle(color: Colors.white54),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Add music to your device to play',
+                            style: TextStyle(color: Colors.white38, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _music.songs.length,
+                      itemBuilder: (context, index) {
+                        final song = _music.songs[index];
+                        final isPlaying = _music.currentTrack?.id == song.id;
+                        return ListTile(
+                          leading: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              gradient: LinearGradient(
+                                colors: isPlaying
+                                    ? [Colors.blueAccent, Colors.purpleAccent]
+                                    : [Colors.white24, Colors.white12],
+                              ),
+                            ),
+                            child: Icon(
+                              isPlaying ? Icons.equalizer : Icons.music_note,
+                              color: Colors.white,
+                            ),
+                          ),
+                          title: Text(
+                            song.title,
+                            style: TextStyle(
+                              color: isPlaying ? Colors.blueAccent : Colors.white,
+                              fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            song.artist ?? 'Unknown Artist',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.5),
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: isPlaying
+                              ? const Icon(Icons.volume_up, color: Colors.blueAccent)
+                              : null,
+                          onTap: () async {
+                            await _music.playSpecific(index);
+                            setState(() {});
+                            Navigator.pop(context);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

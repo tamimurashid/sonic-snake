@@ -78,6 +78,14 @@ class MusicManager {
     await playTrack(playlist[currentIndex]);
   }
 
+  Future<void> playSpecific(int index) async {
+    if (playlist.isEmpty || index < 0 || index >= playlist.length) return;
+    currentIndex = index;
+    await playTrack(playlist[currentIndex]);
+  }
+
+  List<SongModel> get songs => playlist;
+
   void toggleShuffle() => isShuffled = !isShuffled;
   
   void cycleRepeat() {

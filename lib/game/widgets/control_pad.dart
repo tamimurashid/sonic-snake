@@ -9,31 +9,83 @@ class ControlPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        _ControlButton(
-          icon: Icons.keyboard_arrow_up,
-          onPressed: () => onDirection(Direction.up),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            _ControlButton(
-              icon: Icons.keyboard_arrow_left,
-              onPressed: () => onDirection(Direction.left),
-            ),
-            const SizedBox(width: 24),
-            _ControlButton(
-              icon: Icons.keyboard_arrow_right,
-              onPressed: () => onDirection(Direction.right),
-            ),
+    return Container(
+      width: 200,
+      height: 200,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            Colors.white.withOpacity(0.08),
+            Colors.white.withOpacity(0.02),
           ],
         ),
-        _ControlButton(
-          icon: Icons.keyboard_arrow_down,
-          onPressed: () => onDirection(Direction.down),
-        ),
-      ],
+        border: Border.all(color: Colors.white.withOpacity(0.15), width: 2),
+      ),
+      child: Stack(
+        children: [
+          // Up
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _ControlButton(
+                icon: Icons.keyboard_arrow_up_rounded,
+                onPressed: () => onDirection(Direction.up),
+              ),
+            ),
+          ),
+          // Left
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: _ControlButton(
+                icon: Icons.keyboard_arrow_left_rounded,
+                onPressed: () => onDirection(Direction.left),
+              ),
+            ),
+          ),
+          // Right
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: _ControlButton(
+                icon: Icons.keyboard_arrow_right_rounded,
+                onPressed: () => onDirection(Direction.right),
+              ),
+            ),
+          ),
+          // Down
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: _ControlButton(
+                icon: Icons.keyboard_arrow_down_rounded,
+                onPressed: () => onDirection(Direction.down),
+              ),
+            ),
+          ),
+          // Center indicator
+          Center(
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.blueAccent.withOpacity(0.3),
+                border: Border.all(color: Colors.blueAccent, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -50,23 +102,38 @@ class _ControlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
+          width: 70,
+          height: 70,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blueAccent.withOpacity(0.1),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
           ),
-          child: IconButton(
-            onPressed: onPressed,
-            iconSize: 36,
-            style: IconButton.styleFrom(
-              foregroundColor: Colors.white70,
-              padding: const EdgeInsets.all(12),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.circular(20),
+              splashColor: Colors.blueAccent.withOpacity(0.3),
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 40,
+                  color: Colors.white,
+                ),
+              ),
             ),
-            icon: Icon(icon),
           ),
         ),
       ),
