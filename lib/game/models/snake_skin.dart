@@ -24,6 +24,18 @@ class SnakeSkin {
   final bool isLocked;
   final Color? glowColor;
   final bool trailEffect;
+
+  Gradient get headGradient => LinearGradient(
+    colors: [headColor, headColor.withOpacity(0.8)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  Gradient get bodyGradient => LinearGradient(
+    colors: [bodyColor, bodyColor.withOpacity(0.7)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }
 
 const List<SnakeSkin> snakeSkins = <SnakeSkin>[
@@ -32,6 +44,7 @@ const List<SnakeSkin> snakeSkins = <SnakeSkin>[
     label: 'Classic Blue',
     headColor: Color(0xFF3B82F6),
     bodyColor: Color(0xFF60A5FA),
+    glowColor: Color(0xFF3B82F6),
     isLocked: false,
   ),
   SnakeSkin(
@@ -47,6 +60,7 @@ const List<SnakeSkin> snakeSkins = <SnakeSkin>[
     label: 'Rainbow Trail',
     headColor: Color(0xFFE91E63),
     bodyColor: Color(0xFF2196F3),
+    glowColor: Color(0xFFFF00FF),
     trailEffect: true,
     price: 250,
   ),

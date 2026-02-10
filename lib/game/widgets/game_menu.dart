@@ -209,7 +209,7 @@ class GameMenu extends StatelessWidget {
   }
 
   Widget _buildThemeSelector() {
-    final themes = levelThemes.entries.take(3).toList();
+    final themes = levelThemes.values.toList();
     return SizedBox(
       height: 60,
       child: ListView.separated(
@@ -217,8 +217,7 @@ class GameMenu extends StatelessWidget {
         itemCount: themes.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final entry = themes[index];
-          final theme = entry.value;
+          final theme = themes[index];
           final isSelected = theme.name == currentTheme.name;
           return InkWell(
             onTap: () => onSelectTheme(theme),

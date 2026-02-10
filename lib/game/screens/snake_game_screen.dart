@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart' hide Direction;
+import 'package:flame/game.dart';
+
+import '../sonic_snake_game.dart';
 
 import '../models/direction.dart';
 import '../models/level.dart';
@@ -34,29 +37,16 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   final math.Random _random = math.Random();
   final MusicManager _music = MusicManager();
   final UserProgress _progress = UserProgress();
-  Timer? _timer;
+  late SonicSnakeGame _game;
 
-  List<math.Point<int>> _snake = [];
-  List<GameItem> _items = [];
-  List<Obstacle> _obstacles = [];
-  
-  Direction _direction = Direction.right;
-  Direction _queuedDirection = Direction.right;
-  
   bool _isRunning = false;
   bool _isGameOver = false;
   bool _showMenu = true;
   int _score = 0;
   int _combo = 0;
-  int _coinsEarnedSinceStart = 0;
-  int _extraLives = 0;
   int _currentLevelNum = 1;
-  bool _isBulletTime = false;
-  bool _isInvisible = false;
-  Timer? _powerUpTimer;
   Difficulty _difficulty = Difficulty.medium;
   int _foodEaten = 0;
-  final Stopwatch _playtimeStopwatch = Stopwatch();
   
   late GameTheme _currentTheme;
   late List<GameLevel> _levels;
@@ -65,22 +55,74 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
   bool _musicPlayerVisible = true;
   bool _controlsVisible = false;
   List<String> _unlockedBoardStyles = [];
-  bool _showGestureGuide = false;
+  String _layoutMode = 'combined'; // combined, music, game
+  int _retryCost = 10;
+
+  // Re-added for UI/Logic
+  final Stopwatch _playtimeStopwatch = Stopwatch();
+  bool _showGestureGuide = true;
+  
+  // Proxies to Flame game engine
+  int get _extraLives => _game.extraLives;
+  int get _coinsCollected => _game.coinsCollected;
+  bool get _isInvisible => _game.isInvisible;
+  bool get _isBulletTime => _game.isBulletTime;
 
   @override
   void initState() {
     super.initState();
     _levels = generateLevels();
     _currentTheme = levelThemes[1]!;
-    _resetGame(); // Initialize game state immediately
+    _initGame();
     _initServices();
+  }
+
+  void _initGame() {
+    _game = SonicSnakeGame(
+      musicManager: _music,
+      skin: _currentSkin,
+      onScoreChanged: (newScore) {
+        setState(() {
+          _score = newScore;
+          // Level up logic
+          if (_score >= _levels[_currentLevelNum - 1].threshold) {
+            _levelUp();
+          }
+        });
+      },
+      onComboChanged: (newCombo) {
+        setState(() => _combo = newCombo);
+      },
+      onCoinsCollected: (amount) {
+        _progress.addCoins(amount);
+        setState(() {});
+      },
+      onLifeCollected: (lives) {
+        setState(() {});
+      },
+      onGameOver: () {
+        _progress.updateHighScore(_score);
+        setState(() {
+          _isGameOver = true;
+          _isRunning = false;
+          _playtimeStopwatch.stop();
+        });
+      },
+    );
+    
+    if (_currentLevelNum > 1) {
+      _game.spawnObstacles(_levels[_currentLevelNum - 1].numObstacles);
+    }
   }
 
   Future<void> _initServices() async {
     await _progress.init();
-    // Do not request permissions on startup to avoid "Activity Not Found" crashes.
-    // Permissions are requested when user interacts with music controls.
     await _music.fetchSongs();
+    
+    // Listen to current track changes to update UI
+    _music.currentIndexStream.listen((index) {
+      if (mounted) setState(() {});
+    });
     
     final savedSkinId = _progress.selectedSkinId;
     setState(() {
@@ -89,285 +131,64 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       _musicPlayerVisible = _progress.musicPlayerVisible;
       _controlsVisible = _progress.controlsVisible;
       _unlockedBoardStyles = _progress.unlockedBoardStyles;
+      _layoutMode = _progress.layoutMode;
       _difficulty = Difficulty.values[_progress.difficultyIndex];
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _playtimeStopwatch.stop();
     super.dispose();
   }
 
   void _resetGame() {
-    _timer?.cancel();
     _score = 0;
-    _combo = 0;
-    _extraLives = 0;
-    _coinsEarnedSinceStart = 0;
-    _foodEaten = 0;
-    _isInvisible = false;
-    _powerUpTimer?.cancel();
-    _playtimeStopwatch.reset();
-    _currentLevelNum = 1;
     _isGameOver = false;
     _isRunning = false;
-    _isBulletTime = false;
-    _direction = Direction.right;
-    _queuedDirection = Direction.right;
-    _currentTheme = levelThemes[1]!;
-
-    final int midRow = _rows ~/ 2;
-    _snake = [
-      math.Point<int>(midRow, 5),
-      math.Point<int>(midRow, 4),
-      math.Point<int>(midRow, 3),
-    ];
-    
-    _items = [];
-    // Spawn exactly 1 food initially
-    final initialFood = _spawnItem(forceFood: true);
-    if (initialFood != null) _items.add(initialFood);
+    _foodEaten = 0;
+    _playtimeStopwatch.reset();
+    _initGame();
     setState(() {});
   }
-
-  GameItem? _spawnItem({bool forceFood = false}) {
-    for (int attempts = 0; attempts < 100; attempts++) {
-      final p = math.Point(_random.nextInt(_rows), _random.nextInt(_cols));
-      if (!_snake.contains(p) && !_items.any((item) => item.position == p) && !_obstacles.any((o) => o.position == p)) {
-        if (forceFood) {
-          return GameItem(position: p, type: ItemType.food);
-        }
-
-        final rand = _random.nextDouble();
-        final playSeconds = _playtimeStopwatch.elapsed.inSeconds;
-        
-        // All bonus items (Coins, Boosters, Life Savers) appear after 2 minutes (120s)
-        if (playSeconds > 120) {
-          if (rand < 0.15) {
-            return GameItem(position: p, type: ItemType.coin, value: 5);
-          } else if (rand < 0.25) {
-            return GameItem(position: p, type: ItemType.booster, duration: const Duration(seconds: 5));
-          } else if (rand < 0.30) {
-            return GameItem(position: p, type: ItemType.lifeSaver, value: 1);
-          }
-        }
-        
-        return null; // No power-up this time
-      }
-    }
-    return null;
-  }
-
   void _startGame() {
     if (_isGameOver) {
       _resetGame();
     }
-    if (_isRunning) {
-      // If already running, just close menu
-      setState(() => _showMenu = false);
-      return;
-    }
-    _isRunning = true;
-    _showMenu = false;
-    _showGestureGuide = !_progress.controlsVisible; // Show guide if buttons are hidden
-    _playtimeStopwatch.start();
-    _startTimer();
-    setState(() {});
-    
-    if (_showGestureGuide) {
-      Future.delayed(2.seconds, () {
-        if (mounted) setState(() => _showGestureGuide = false);
-      });
-    }
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    final baseRate = _levels[_currentLevelNum - 1].tickRate;
-    // Apply difficulty multiplier (Sonic is fastest)
-    final difficultyAdjustedRate = Duration(milliseconds: (baseRate.inMilliseconds / _difficulty.speedMultiplier).round());
-    final effectiveRate = _isBulletTime ? difficultyAdjustedRate * 2 : difficultyAdjustedRate;
-    _timer = Timer.periodic(effectiveRate, (_) => _tick());
-  }
-
-  void _pauseGame() {
-    _isRunning = false;
-    _timer?.cancel();
-    _playtimeStopwatch.stop();
-    setState(() {});
-  }
-
-  void _tick() {
-    if (!_isRunning) return;
-
-    _direction = _queuedDirection;
-    final head = _snake.first;
-    final nextHead = _nextPosition(head, _direction);
-
-    if (_isCollision(nextHead)) {
-      if (_extraLives > 0) {
-        setState(() => _extraLives--);
-        HapticFeedback.heavyImpact();
-        return; 
-      }
-      _handleGameOver();
-      _playtimeStopwatch.stop();
-      return;
-    }
-
-    _snake.insert(0, nextHead);
-
-    // Check collision with any item
-    int itemIndex = _items.indexWhere((item) => item.position == nextHead);
-    if (itemIndex != -1) {
-      final collectedItem = _items[itemIndex];
-      _handleItemCollection(collectedItem);
-      _items.removeAt(itemIndex);
-      
-      // If food was eaten, spawn EXACTLY one new food
-      if (collectedItem.type == ItemType.food) {
-        final newFood = _spawnItem(forceFood: true);
-        if (newFood != null) _items.add(newFood);
-      }
-      
-      // Occasionally try to spawn a second item (power-up) if board is nearly empty
-      if (_items.length < 2 && _random.nextDouble() < 0.15) {
-        final newItem = _spawnItem(forceFood: false);
-        if (newItem != null) _items.add(newItem);
-      }
-    } else {
-      _snake.removeLast();
-    }
-
-    setState(() {});
-  }
-
-  void _handleItemCollection(GameItem item) {
-    HapticFeedback.mediumImpact();
-    
-    switch (item.type) {
-      case ItemType.food:
-        _score += 10;
-        _combo++;
-        _foodEaten++;
-        
-        // 10 Food = 1 Coin logic
-        if (_foodEaten % 10 == 0) {
-          _progress.addCoins(1);
-          _coinsEarnedSinceStart += 1;
-        }
-
-        // Bullet Time Trigger
-        if (_combo >= 10 && !_isBulletTime) {
-          _triggerBulletTime();
-        }
-        break;
-      case ItemType.coin:
-        _score += 5;
-        _progress.addCoins(item.value);
-        _coinsEarnedSinceStart += item.value;
-        break;
-      case ItemType.booster:
-        _activateBooster(item.duration ?? const Duration(seconds: 5));
-        break;
-      case ItemType.lifeSaver:
-        setState(() => _extraLives += item.value);
-        break;
-    }
-
-    // Level up logic
-    if (_score >= _levels[_currentLevelNum - 1].threshold) {
-      _levelUp();
-    }
-  }
-
-  void _activateBooster(Duration duration) {
-    _powerUpTimer?.cancel();
-    setState(() => _isInvisible = true);
-    _powerUpTimer = Timer(duration, () {
-      if (mounted) setState(() => _isInvisible = false);
+    _game.resumeEngine();
+    if (!_playtimeStopwatch.isRunning) _playtimeStopwatch.start();
+    setState(() {
+      _isRunning = true;
+      _showMenu = false;
     });
   }
 
-  // Removed _handleEat as it's replaced by _handleItemCollection
-
-  void _triggerBulletTime() {
-    setState(() => _isBulletTime = true);
-    _startTimer(); // Restart with slower rate
-    Future.delayed(3.seconds, () {
-      if (mounted) {
-        setState(() {
-          _isBulletTime = false;
-          if (_isRunning) _startTimer();
-        });
-      }
+  void _pauseGame() {
+    _game.pauseEngine();
+    _playtimeStopwatch.stop();
+    setState(() {
+      _isRunning = false;
     });
   }
 
   void _levelUp() {
-    _currentLevelNum++;
-    if (_currentLevelNum > _levels.length) _currentLevelNum = _levels.length;
-    if (levelThemes.containsKey(_currentLevelNum)) {
-      _currentTheme = levelThemes[_currentLevelNum]!;
-    }
+    if (_currentLevelNum >= _levels.length) return;
     
-    // Generate obstacles for levels 2+
-    _generateObstacles();
-    
-    HapticFeedback.heavyImpact();
-    _startTimer();
-  }
-
-  void _generateObstacles() {
-    _obstacles.clear();
-    if (_currentLevelNum >= 2) {
-      final currentLevel = _levels[_currentLevelNum - 1];
-      for (int i = 0; i < currentLevel.numObstacles; i++) {
-        math.Point<int> obstaclePos;
-        do {
-          obstaclePos = math.Point(_random.nextInt(_rows), _random.nextInt(_cols));
-        } while (_snake.contains(obstaclePos) || 
-                 _items.any((item) => item.position == obstaclePos) || 
-                 _obstacles.any((o) => o.position == obstaclePos));
-        _obstacles.add(Obstacle(position: obstaclePos));
+    setState(() {
+      _currentLevelNum++;
+      if (levelThemes.containsKey(_currentLevelNum)) {
+        _currentTheme = levelThemes[_currentLevelNum]!;
       }
-    }
-  }
-
-  void _handleGameOver() {
-    _isGameOver = true;
-    _isRunning = false;
-    _timer?.cancel();
-    _combo = 0;
-    HapticFeedback.vibrate();
-    setState(() {});
-  }
-
-  math.Point<int> _nextPosition(math.Point<int> current, Direction direction) {
-    switch (direction) {
-      case Direction.up: return math.Point((current.x - 1 + _rows) % _rows, current.y);
-      case Direction.down: return math.Point((current.x + 1) % _rows, current.y);
-      case Direction.left: return math.Point(current.x, (current.y - 1 + _cols) % _cols);
-      case Direction.right: return math.Point(current.x, (current.y + 1) % _cols);
-    }
-  }
-
-  bool _isCollision(math.Point<int> p) {
-    // Check snake collision
-    if (_snake.contains(p)) return true;
+    });
     
-    // Check obstacle collision
-    for (final obstacle in _obstacles) {
-      if (obstacle.position == p) return true;
-    }
-    
-    return false;
+    _game.spawnObstacles(_levels[_currentLevelNum - 1].numObstacles);
+    HapticFeedback.heavyImpact();
   }
 
   void _queueDirection(Direction d) {
-    if (_isOpposite(d, _direction)) return;
-    _queuedDirection = d;
+    if (_isRunning) {
+      _game.snake.direction = d;
+    }
   }
 
   bool _isOpposite(Direction a, Direction b) {
@@ -375,6 +196,30 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
            (a == Direction.down && b == Direction.up) ||
            (a == Direction.left && b == Direction.right) ||
            (a == Direction.right && b == Direction.left);
+  }
+
+  void _toggleLayoutMode() {
+    String nextMode;
+    // Fast cycle optimized for user's primary choices: Combined (Hybrid) and Music
+    if (_layoutMode == 'combined') nextMode = 'music';
+    else if (_layoutMode == 'music') nextMode = 'game';
+    else nextMode = 'combined';
+    
+    setState(() => _layoutMode = nextMode);
+    _progress.setLayoutMode(nextMode);
+    HapticFeedback.selectionClick();
+  }
+
+  Future<void> _handleRetry() async {
+    if (_progress.coins >= _retryCost) {
+      await _progress.spendCoins(_retryCost);
+      _resetGame();
+      _startGame();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not enough coins! Need 10.')),
+      );
+    }
   }
 
   @override
@@ -403,15 +248,42 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
           SafeArea(
             child: Column(
               children: [
-                _buildHeader(),
-                Expanded(child: _buildGameBoard()),
-                _buildHUDControls(),
+                if (_layoutMode != 'game') _buildHeader(),
+                if (_layoutMode != 'music') Expanded(child: _buildGameBoard()),
+                if (_layoutMode == 'music') const Spacer(),
+                if (_layoutMode == 'music') _buildAdvancedMusicUI(), // New UI for full music mode
+                if (_layoutMode != 'music') _buildHUDControls(),
               ],
             ),
           ),
           
           if (_showGestureGuide) _buildGestureGuide(),
+          if (_isGameOver) _buildGameOverOverlay(),
           if (_showMenu) _buildMenuOverlay(),
+
+          // Persistent Layout Toggle Button
+          Positioned(
+            top: 10,
+            left: 10,
+            child: SafeArea(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    _layoutMode == 'combined' ? Icons.dashboard : 
+                    _layoutMode == 'music' ? Icons.music_note : Icons.videogame_asset,
+                    color: Colors.blueAccent,
+                  ),
+                  onPressed: _toggleLayoutMode,
+                  tooltip: 'Switch Layout Mode',
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -451,14 +323,19 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       StatCard(label: 'Score', value: _score.toString(), color: _currentTheme.accentColor),
                       const SizedBox(width: 8),
-                      StatCard(label: 'Level', value: _currentLevelNum.toString(), color: Colors.amber),
+                      StatCard(label: 'High', value: _progress.highScore.toString(), color: Colors.amber),
+                      const SizedBox(width: 8),
+                      StatCard(label: 'Level', value: _currentLevelNum.toString(), color: Colors.blueAccent),
                       const SizedBox(width: 8),
                       StatCard(label: 'Coins', value: _progress.coins.toString(), color: Colors.amberAccent),
                       if (_extraLives > 0) ...[
@@ -466,10 +343,13 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                         StatCard(label: 'Lives', value: _extraLives.toString(), color: Colors.redAccent),
                       ],
                     ],
-            ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
-          if (_musicPlayerVisible) _buildMusicBar(),
+          if (_musicPlayerVisible && _layoutMode != 'music') _buildMusicBar(),
         ],
       ),
     );
@@ -532,30 +412,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                 },
                 child: Stack(
                   children: [
-                    CustomPaint(
-                      painter: BoardPainter(
-                        rows: _rows, 
-                        cols: _cols, 
-                        gridColor: _currentTheme.gridColor,
-                        accentColor: _currentTheme.accentColor,
-                        style: _currentBoardStyle,
-                      ),
-                      size: Size(size, size),
-                    ),
-                    CustomPaint(
-                      painter: GamePainter(
-                  rows: _rows,
-                  cols: _cols,
-                  snake: _snake,
-                  items: _items,
-                  skin: _currentSkin,
-                  direction: _direction,
-                  isBulletTime: _isBulletTime,
-                  isInvisible: _isInvisible,
-                  obstacles: _obstacles,
-                ),
-                      size: Size(size, size),
-                    ),
+                    GameWidget(game: _game),
                     if (_isGameOver) _buildGameOverOverlay(),
                   ],
                 ),
@@ -569,20 +426,135 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
 
   Widget _buildGameOverOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.8),
+      color: Colors.black.withOpacity(0.9),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('GAME OVER', style: GoogleFonts.orbitron(fontSize: 32, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            Text('GAME OVER', 
+              style: GoogleFonts.orbitron(fontSize: 40, color: Colors.redAccent, fontWeight: FontWeight.bold)
+            ).animate().shake().fadeIn(),
             const SizedBox(height: 20),
-            StatCard(label: 'Final Score', value: _score.toString(), color: Colors.white),
+            StatCard(label: 'Score', value: _score.toString(), color: Colors.white),
             const SizedBox(height: 30),
-            ElevatedButton(onPressed: _resetGame, child: const Text("RETRY")),
-            TextButton(onPressed: () => setState(() => _showMenu = true), child: const Text("MENU")),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: Text("RETRY (10 COINS)", style: GoogleFonts.orbitron(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              onPressed: _handleRetry,
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => setState(() => _showMenu = true), 
+              child: Text("BACK TO MENU", style: GoogleFonts.orbitron(color: Colors.white70))
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAdvancedMusicUI() {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('MUSIC LAB', style: GoogleFonts.orbitron(color: Colors.white, fontSize: 18)),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.sort_by_alpha, color: Colors.blueAccent), 
+                      onPressed: () => setState(() => _music.sortSongs('title')),
+                      tooltip: 'Sort by Title',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.calendar_today, color: Colors.blueAccent), 
+                      onPressed: () => setState(() => _music.sortSongs('date')),
+                      tooltip: 'Sort by Date',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.psychology, color: Colors.pinkAccent), 
+                      onPressed: () => setState(() => _music.smartShuffle()),
+                      tooltip: 'Smart Shuffle',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const Divider(color: Colors.white24, height: 30),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _music.songs.length,
+                itemBuilder: (context, index) {
+                  final song = _music.songs[index];
+                  final isCurrent = _music.currentTrack?.id == song.id;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isCurrent ? Colors.blueAccent : Colors.white12,
+                      child: Icon(isCurrent ? Icons.play_arrow : Icons.music_note, color: Colors.white),
+                    ),
+                    title: Text(song.title, 
+                      style: TextStyle(color: isCurrent ? Colors.blueAccent : Colors.white70, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(song.album ?? "Unknown Album", 
+                      style: const TextStyle(color: Colors.white38, fontSize: 12)
+                    ),
+                    onTap: () => setState(() => _music.playSpecific(index)),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+            _buildLargeControls(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLargeControls() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        IconButton(
+          icon: Icon(Icons.shuffle, color: _music.isShuffled ? Colors.blueAccent : Colors.white38), 
+          onPressed: () => setState(() => _music.toggleShuffle())
+        ),
+        IconButton(
+          icon: const Icon(Icons.skip_previous, size: 40, color: Colors.white), 
+          onPressed: () => setState(() => _music.prev())
+        ),
+        FloatingActionButton(
+          backgroundColor: Colors.blueAccent,
+          onPressed: () => setState(() => _music.isPlaying ? _music.pause() : _music.resume()),
+          child: Icon(_music.isPlaying ? Icons.pause : Icons.play_arrow, size: 30),
+        ),
+        IconButton(
+          icon: const Icon(Icons.skip_next, size: 40, color: Colors.white), 
+          onPressed: () => setState(() => _music.next())
+        ),
+        IconButton(
+          icon: Icon(Icons.repeat, color: _music.repeatMode != RepeatMode.off ? Colors.blueAccent : Colors.white38), 
+          onPressed: () => setState(() => _music.cycleRepeat())
+        ),
+      ],
     );
   }
 
@@ -616,7 +588,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
           _difficulty = diff;
         });
         await _progress.setDifficultyIndex(diff.index);
-        _startTimer();
         HapticFeedback.selectionClick();
       },
       foodEaten: _foodEaten,
@@ -696,11 +667,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
               // Settings button (Independent)
               _buildModernSettingsButton(),
               
-              // Centered Control Pad (Conditional)
-              if (_controlsVisible) 
-                ControlPad(onDirection: _queueDirection)
-              else
-                const SizedBox(height: 120), // Spacer to keep height consistent
+              // Centered Control Pad area (Flexible to prevent overflow)
+              Flexible(
+                child: Center(
+                  child: _controlsVisible 
+                    ? ControlPad(onDirection: _queueDirection)
+                    : const SizedBox(height: 120, width: 20), // Spacer to keep height and minimal width
+                ),
+              ),
               
               // Play/Pause button (Independent)
               _buildModernPlayButton(),

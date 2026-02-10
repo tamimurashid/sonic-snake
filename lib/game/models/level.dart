@@ -24,6 +24,13 @@ const Map<int, GameTheme> levelThemes = {
     gridColor: Color(0xFF4CAF50),
     accentColor: Color(0xFF81C784),
   ),
+  3: GameTheme(
+    name: 'Sunset',
+    gradientColors: [Color(0xFFF09819), Color(0xFFED4264)],
+    boardColor: Color(0xFF3E2723),
+    gridColor: Colors.orangeAccent,
+    accentColor: Colors.deepOrangeAccent,
+  ),
   5: GameTheme(
     name: 'Cyber-City',
     gradientColors: [Color(0xFF141E30), Color(0xFF243B55)],
@@ -31,12 +38,26 @@ const Map<int, GameTheme> levelThemes = {
     gridColor: Color(0xFFE91E63),
     accentColor: Color(0xFF00FFF2),
   ),
+  7: GameTheme(
+    name: 'Midnight',
+    gradientColors: [Color(0xFF021027), Color(0xFF0F2027)],
+    boardColor: Color(0xFF000000),
+    gridColor: Colors.deepPurpleAccent,
+    accentColor: Colors.blueAccent,
+  ),
   10: GameTheme(
     name: 'Deep Space',
     gradientColors: [Color(0xFF000428), Color(0xFF004E92)],
     boardColor: Color(0xFF000428),
     gridColor: Color(0xFF3F51B5),
     accentColor: Color(0xFF7986CB),
+  ),
+  15: GameTheme(
+    name: 'Volcano',
+    gradientColors: [Color(0xFF8E0E00), Color(0xFF1F1C18)],
+    boardColor: Color(0xFF1F1C18),
+    gridColor: Colors.redAccent,
+    accentColor: Colors.orangeAccent,
   ),
 };
 

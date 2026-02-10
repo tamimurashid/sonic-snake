@@ -9,6 +9,8 @@ class UserProgress {
   static const String _keyControlsVisible = 'controls_visible';
   static const String _keyUnlockedBoardStyles = 'unlocked_board_styles';
   static const String _keyDifficulty = 'game_difficulty';
+  static const String _keyHighScore = 'high_score';
+  static const String _keyLayoutMode = 'layout_mode';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
@@ -105,5 +107,21 @@ class UserProgress {
   Future<void> setDifficultyIndex(int index) async {
     if (!_isInitialized) return;
     await _prefs!.setInt(_keyDifficulty, index);
+  }
+
+  int get highScore => _isInitialized ? (_prefs?.getInt(_keyHighScore) ?? 0) : 0;
+
+  Future<void> updateHighScore(int score) async {
+    if (!_isInitialized) return;
+    if (score > highScore) {
+      await _prefs!.setInt(_keyHighScore, score);
+    }
+  }
+
+  String get layoutMode => _isInitialized ? (_prefs?.getString(_keyLayoutMode) ?? 'combined') : 'combined';
+
+  Future<void> setLayoutMode(String mode) async {
+    if (!_isInitialized) return;
+    await _prefs!.setString(_keyLayoutMode, mode);
   }
 }

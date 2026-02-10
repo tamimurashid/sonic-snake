@@ -6,16 +6,20 @@ import 'package:just_audio_background/just_audio_background.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // Initialize background audio. 
+  // We use a timeout to prevent the app from being stuck on the splash screen if the service hangs.
   try {
-    // Attempt to initialize background audio, but don't block app start forever
     await JustAudioBackground.init(
       androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
       androidNotificationChannelName: 'Audio playback',
       androidNotificationOngoing: true,
-    ).timeout(const Duration(seconds: 2));
+      androidStopForegroundOnPause: false,
+      androidNotificationClickStartsActivity: true,
+      androidResumeOnClick: true,
+    ).timeout(const Duration(seconds: 5));
   } catch (e) {
     debugPrint("Audio background init failed or timed out: $e");
-    // Continue anyway so the app opens
+    // Continue anyway so the app opens. Music might not work in background, but app is usable.
   }
   
   runApp(const MyApp());
