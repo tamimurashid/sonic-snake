@@ -12,8 +12,8 @@ Future<void> main() async {
     await JustAudioBackground.init(
       androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
       androidNotificationChannelName: 'Audio playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: false,
+      androidNotificationOngoing: false,
+      androidStopForegroundOnPause: true,
       androidNotificationClickStartsActivity: true,
       androidResumeOnClick: true,
     ).timeout(const Duration(seconds: 5));

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:on_audio_query/on_audio_query.dart';
 import 'package:flutter_animate/flutter_animate.dart' hide Direction;
 import 'package:flame/game.dart';
 
@@ -248,9 +249,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
           SafeArea(
             child: Column(
               children: [
-                if (_layoutMode != 'game') _buildHeader(),
+                if (_layoutMode != 'music') _buildHeader(),
                 if (_layoutMode != 'music') Expanded(child: _buildGameBoard()),
-                if (_layoutMode == 'music') const Spacer(),
+                if (_layoutMode == 'music') const SizedBox(height: 20),
+                if (_layoutMode == 'music') _buildVinylCard(),
+                if (_layoutMode == 'music') const SizedBox(height: 10),
                 if (_layoutMode == 'music') _buildAdvancedMusicUI(), // New UI for full music mode
                 if (_layoutMode != 'music') _buildHUDControls(),
               ],
@@ -398,25 +401,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
                 BoxShadow(color: Colors.white.withOpacity(0.05), blurRadius: 10, offset: const Offset(5, 5)),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: GestureDetector(
-                onPanUpdate: (details) {
-                  final dx = details.delta.dx;
-                  final dy = details.delta.dy;
-                  if (dx.abs() > dy.abs()) {
-                    _queueDirection(dx > 0 ? Direction.right : Direction.left);
-                  } else {
-                    _queueDirection(dy > 0 ? Direction.down : Direction.up);
-                  }
-                },
-                child: Stack(
-                  children: [
-                    GameWidget(game: _game),
-                    if (_isGameOver) _buildGameOverOverlay(),
-                  ],
-                ),
-              ),
+            child: Stack(
+              children: [
+                GameWidget(game: _game),
+                if (_isGameOver) _buildGameOverOverlay(),
+              ],
             ),
           ),
         ).animate(target: _isBulletTime ? 1 : 0).shake(hz: 4, curve: Curves.easeInOut);
@@ -461,100 +450,300 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> with TickerProviderSt
 
   Widget _buildAdvancedMusicUI() {
     return Expanded(
+      flex: 2,
       child: Container(
-        margin: const EdgeInsets.all(20),
-        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        constraints: const BoxConstraints(maxHeight: 450), // Prevent overflow
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          color: Colors.white.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(40),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 40, spreadRadius: -10),
+          ],
         ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('MUSIC LAB', style: GoogleFonts.orbitron(color: Colors.white, fontSize: 18)),
-                Row(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(40),
+          child: Column(
+            children: [
+              // Header Section
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                color: Colors.white.withOpacity(0.02),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.sort_by_alpha, color: Colors.blueAccent), 
-                      onPressed: () => setState(() => _music.sortSongs('title')),
-                      tooltip: 'Sort by Title',
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('MUSIC LAB', style: GoogleFonts.orbitron(color: Colors.blueAccent, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                        Text('${_music.songs.length} Tracks Syncing', style: GoogleFonts.inter(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.calendar_today, color: Colors.blueAccent), 
-                      onPressed: () => setState(() => _music.sortSongs('date')),
-                      tooltip: 'Sort by Date',
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.psychology, color: Colors.pinkAccent), 
-                      onPressed: () => setState(() => _music.smartShuffle()),
-                      tooltip: 'Smart Shuffle',
+                    Wrap(
+                      spacing: 4,
+                      children: [
+                        _buildMusicActionBtn(Icons.sort_by_alpha, () => setState(() => _music.sortSongs('title')), 'A-Z'),
+                        _buildMusicActionBtn(Icons.calendar_month, () => setState(() => _music.sortSongs('date_desc')), 'New'),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-            const Divider(color: Colors.white24, height: 30),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _music.songs.length,
-                itemBuilder: (context, index) {
-                  final song = _music.songs[index];
-                  final isCurrent = _music.currentTrack?.id == song.id;
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: isCurrent ? Colors.blueAccent : Colors.white12,
-                      child: Icon(isCurrent ? Icons.play_arrow : Icons.music_note, color: Colors.white),
-                    ),
-                    title: Text(song.title, 
-                      style: TextStyle(color: isCurrent ? Colors.blueAccent : Colors.white70, fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(song.album ?? "Unknown Album", 
-                      style: const TextStyle(color: Colors.white38, fontSize: 12)
-                    ),
-                    onTap: () => setState(() => _music.playSpecific(index)),
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 20),
-            _buildLargeControls(),
+              
+
+              // Track List
+              Expanded(
+                child: ShaderMask(
+                  shaderCallback: (Rect rect) {
+                    return const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.purple, Colors.transparent, Colors.transparent, Colors.purple],
+                      stops: [0.0, 0.05, 0.95, 1.0],
+                    ).createShader(rect);
+                  },
+                  blendMode: BlendMode.dstOut,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    itemCount: _music.songs.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final song = _music.songs[index];
+                      final isCurrent = _music.currentTrack?.id == song.id;
+                      return AnimatedContainer(
+                        duration: 300.ms,
+                        decoration: BoxDecoration(
+                          color: isCurrent ? Colors.blueAccent.withOpacity(0.15) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: isCurrent ? Colors.blueAccent : Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Icon(isCurrent ? Icons.graphic_eq : Icons.music_note, color: Colors.white, size: 20),
+                          ).animate(target: isCurrent ? 1 : 0).shimmer(),
+                          title: Text(song.title, 
+                            style: GoogleFonts.inter(color: isCurrent ? Colors.blueAccent : Colors.white, fontSize: 14, fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(song.artist ?? "Unknown Artist", 
+                            style: GoogleFonts.inter(color: isCurrent ? Colors.blueAccent.withOpacity(0.5) : Colors.white38, fontSize: 11)
+                          ),
+                          onTap: () {
+                            _music.playSpecific(index);
+                            setState(() {
+                              // Sync UI
+                            });
+                          },
+                          trailing: isCurrent ? const Icon(Icons.play_circle_filled, color: Colors.blueAccent) : null,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              
+              // Bottom Controls Section
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.2),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                ),
+                child: _buildLargeControls(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMusicActionBtn(IconData icon, VoidCallback onPressed, String label, {Color color = Colors.blueAccent}) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 4),
+            Text(label, style: GoogleFonts.orbitron(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
     );
   }
 
+  IconData _getPlayModeIcon() {
+    switch (_music.playbackMode) {
+      case PlaybackMode.normal: return Icons.repeat;
+      case PlaybackMode.shuffle: return Icons.shuffle;
+      case PlaybackMode.mix: return Icons.psychology;
+      case PlaybackMode.random: return Icons.casino;
+    }
+  }
+
+  String _getPlayModeLabel() {
+    switch (_music.playbackMode) {
+      case PlaybackMode.normal: return 'Normal';
+      case PlaybackMode.shuffle: return 'Shuffle';
+      case PlaybackMode.mix: return 'Mix';
+      case PlaybackMode.random: return 'Random';
+    }
+  }
+
   Widget _buildLargeControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          icon: Icon(Icons.shuffle, color: _music.isShuffled ? Colors.blueAccent : Colors.white38), 
-          onPressed: () => setState(() => _music.toggleShuffle())
-        ),
-        IconButton(
-          icon: const Icon(Icons.skip_previous, size: 40, color: Colors.white), 
-          onPressed: () => setState(() => _music.prev())
-        ),
-        FloatingActionButton(
-          backgroundColor: Colors.blueAccent,
-          onPressed: () => setState(() => _music.isPlaying ? _music.pause() : _music.resume()),
-          child: Icon(_music.isPlaying ? Icons.pause : Icons.play_arrow, size: 30),
-        ),
-        IconButton(
-          icon: const Icon(Icons.skip_next, size: 40, color: Colors.white), 
-          onPressed: () => setState(() => _music.next())
-        ),
-        IconButton(
-          icon: Icon(Icons.repeat, color: _music.repeatMode != RepeatMode.off ? Colors.blueAccent : Colors.white38), 
-          onPressed: () => setState(() => _music.cycleRepeat())
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(_getPlayModeIcon(), color: _music.playbackMode != PlaybackMode.normal ? Colors.blueAccent : Colors.white38, size: 24), 
+                  onPressed: () {
+                    _music.togglePlayMode();
+                    setState(() {});
+                  }
+                ),
+                Text(_getPlayModeLabel(), style: GoogleFonts.inter(fontSize: 8, color: Colors.white38)),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Icons.skip_previous_rounded, size: 48, color: Colors.white), 
+              onPressed: () {
+                _music.prev();
+                setState(() {});
+              }
+            ),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: [Colors.blueAccent, Colors.purpleAccent]),
+                boxShadow: [BoxShadow(color: Colors.blueAccent, blurRadius: 20, spreadRadius: -5)],
+              ),
+              child: IconButton(
+                icon: Icon(_music.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 40, color: Colors.white),
+                onPressed: () {
+                  _music.isPlaying ? _music.pause() : _music.resume();
+                  setState(() {});
+                },
+              ),
+            ).animate(onPlay: (c) => c.repeat(reverse: true)).shimmer(color: Colors.white24, duration: 2.seconds),
+            IconButton(
+              icon: const Icon(Icons.skip_next_rounded, size: 48, color: Colors.white), 
+              onPressed: () {
+                _music.next();
+                setState(() {});
+              }
+            ),
+            IconButton(
+              icon: Icon(Icons.repeat_rounded, color: _music.repeatMode != RepeatMode.off ? Colors.blueAccent : Colors.white38, size: 24), 
+              onPressed: () {
+                _music.cycleRepeat();
+                setState(() {});
+              }
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _buildVinylCard() {
+    return Center(
+      child: Container(
+        height: 180, 
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        child: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Vinyl Record
+              Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.black,
+                      Colors.grey.shade900,
+                      Colors.black,
+                      Colors.grey.shade800,
+                      Colors.black,
+                    ],
+                    stops: const [0.0, 0.4, 0.6, 0.8, 1.0],
+                  ),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, spreadRadius: 10),
+                  ],
+                ),
+              ).animate(
+                key: ValueKey('vinyl_${_music.isPlaying}'),
+                onPlay: (c) => _music.isPlaying ? c.repeat() : c.stop(),
+              ).rotate(duration: 5.seconds),
+
+              // Artwork
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white10, width: 2),
+                  boxShadow: [
+                    BoxShadow(color: Colors.blueAccent.withOpacity(0.3), blurRadius: 20),
+                  ],
+                ),
+                child: ClipOval(
+                  child: QueryArtworkWidget(
+                    id: _music.currentTrack?.id ?? 0,
+                    type: ArtworkType.AUDIO,
+                    nullArtworkWidget: Container(
+                      color: Colors.blueAccent.withOpacity(0.1),
+                      child: const Icon(Icons.music_note, color: Colors.blueAccent, size: 40),
+                    ),
+                  ),
+                ),
+              ).animate(
+                key: ValueKey('artwork_${_music.isPlaying}'),
+                onPlay: (c) => _music.isPlaying ? c.repeat() : c.stop(),
+              ).rotate(duration: 5.seconds),
+              
+              // Center Pin
+              Container(
+                width: 12,
+                height: 12,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

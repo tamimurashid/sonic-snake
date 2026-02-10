@@ -8,48 +8,57 @@ import 'dart:math' as math;
 
 
 enum RepeatMode { off, one, all }
+enum PlaybackMode { normal, shuffle, mix, random }
 
 class MusicManager {
   MusicManager() {
-    _audioPlayer = AudioPlayer();
     _audioQuery = OnAudioQuery();
-    // Removed manual _initAudioSession() as it conflicts with just_audio_background
-    
-    // Listen for underlying playback errors
-    _audioPlayer.playbackEventStream.listen((event) {
-      // Normal playback events
-    }, onError: (Object e, StackTrace stack) {
-      debugPrint('A stream error occurred: $e');
-    });
+    _initPlayer();
+  }
 
-    _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        if (repeatMode == RepeatMode.one) {
-          playTrack(currentTrack!);
-        } else {
-          next();
+  Future<void> _initPlayer() async {
+    try {
+      _audioPlayer = AudioPlayer();
+      
+      // Listen for underlying playback errors
+      _audioPlayer?.playbackEventStream.listen((event) {
+        // Normal playback events
+      }, onError: (Object e, StackTrace stack) {
+        debugPrint('A stream error occurred: $e');
+      });
+
+      _audioPlayer?.playerStateStream.listen((state) {
+        if (state.processingState == ProcessingState.completed) {
+          if (repeatMode == RepeatMode.one) {
+            playTrack(currentTrack!);
+          } else {
+            next();
+          }
         }
-      }
-      isPlaying = state.playing;
-    });
+        isPlaying = state.playing;
+      });
+    } catch (e) {
+      debugPrint("Error initializing AudioPlayer: $e");
+    }
   }
 
   // Removed _initAudioSession entirely to let just_audio_background manage the session
 
-  late final AudioPlayer _audioPlayer;
+  AudioPlayer? _audioPlayer;
   late final OnAudioQuery _audioQuery;
 
   List<SongModel> playlist = [];
   List<SongModel> _originalPlaylist = []; // Keep for reference
   Map<String, int> _genrePreferences = {}; // "ML-lite" preference tracking
   bool isShuffled = false;
+  PlaybackMode playbackMode = PlaybackMode.normal;
   RepeatMode repeatMode = RepeatMode.off;
   bool isPlaying = false;
 
   // Stream for current index to keep UI in sync
-  Stream<int?> get currentIndexStream => _audioPlayer.currentIndexStream;
-  int? get currentIndex => _audioPlayer.currentIndex;
-  SongModel? get currentTrack => (currentIndex != null && currentIndex! < playlist.length) ? playlist[currentIndex!] : null;
+  Stream<int?> get currentIndexStream => _audioPlayer?.currentIndexStream ?? const Stream.empty();
+  int? get currentIndex => _audioPlayer?.currentIndex;
+  SongModel? get currentTrack => (_audioPlayer != null && currentIndex != null && currentIndex! < playlist.length) ? playlist[currentIndex!] : null;
 
   Future<bool> requestPermissions() async {
     try {
@@ -107,24 +116,34 @@ class MusicManager {
   }
 
   Future<void> pause() async {
-    await _audioPlayer.pause();
+    await _audioPlayer?.pause();
     isPlaying = false;
   }
 
   Future<void> resume() async {
-    await _audioPlayer.play();
+    await _audioPlayer?.play();
     isPlaying = true;
   }
 
   Future<void> next() async {
-    if (_audioPlayer.hasNext) {
-      await _audioPlayer.seekToNext();
+    if (playbackMode == PlaybackMode.random && playlist.isNotEmpty) {
+      final randomIndex = math.Random().nextInt(playlist.length);
+      await playSpecific(randomIndex);
+      return;
+    }
+
+    if (_audioPlayer?.hasNext ?? false) {
+      await _audioPlayer?.seekToNext();
+    } else if (playlist.isNotEmpty) {
+      await playSpecific(0); // Wrap to beginning
     }
   }
 
   Future<void> prev() async {
-    if (_audioPlayer.hasPrevious) {
-      await _audioPlayer.seekToPrevious();
+    if (_audioPlayer?.hasPrevious ?? false) {
+      await _audioPlayer?.seekToPrevious();
+    } else if (playlist.isNotEmpty) {
+      await playSpecific(playlist.length - 1); // Wrap to end
     }
   }
 
@@ -137,8 +156,8 @@ class MusicManager {
         _genrePreferences[song.genre!] = (_genrePreferences[song.genre!] ?? 0) + 1;
       }
 
-      await _audioPlayer.seek(Duration.zero, index: index);
-      _audioPlayer.play();
+      await _audioPlayer?.seek(Duration.zero, index: index);
+      _audioPlayer?.play();
       isPlaying = true;
     } catch (e) {
       debugPrint("Error playing specific track: $e");
@@ -146,7 +165,8 @@ class MusicManager {
   }
 
   Future<void> _updateAudioSource() async {
-    await _audioPlayer.setAudioSource(
+    if (_audioPlayer == null) return;
+    await _audioPlayer!.setAudioSource(
       ConcatenatingAudioSource(
         children: playlist.map((song) {
           final Uri contentUri = Uri.parse('content://media/external/audio/media/${song.id}');
@@ -175,8 +195,11 @@ class MusicManager {
       case 'album':
         playlist.sort((a, b) => (a.album ?? "").compareTo(b.album ?? ""));
         break;
-      case 'date':
+      case 'date_desc':
         playlist.sort((a, b) => (b.dateAdded ?? 0).compareTo(a.dateAdded ?? 0));
+        break;
+      case 'date_asc':
+        playlist.sort((a, b) => (a.dateAdded ?? 0).compareTo(b.dateAdded ?? 0));
         break;
     }
     _updateAudioSource();
@@ -218,19 +241,47 @@ class MusicManager {
 
   List<SongModel> get songs => playlist;
 
+  void togglePlayMode() {
+    playbackMode = PlaybackMode.values[(playbackMode.index + 1) % PlaybackMode.values.length];
+    
+    switch (playbackMode) {
+      case PlaybackMode.normal:
+        isShuffled = false;
+        _audioPlayer?.setShuffleModeEnabled(false);
+        // Restore original order if needed, but usually just turning off shuffle is enough
+        break;
+      case PlaybackMode.shuffle:
+        isShuffled = true;
+        _audioPlayer?.setShuffleModeEnabled(true);
+        break;
+      case PlaybackMode.mix:
+        isShuffled = false;
+        _audioPlayer?.setShuffleModeEnabled(false);
+        smartShuffle();
+        break;
+      case PlaybackMode.random:
+        isShuffled = false;
+        _audioPlayer?.setShuffleModeEnabled(false);
+        // Pure random is handled in next()
+        break;
+    }
+  }
+
   void toggleShuffle() {
     isShuffled = !isShuffled;
-    _audioPlayer.setShuffleModeEnabled(isShuffled);
+    _audioPlayer?.setShuffleModeEnabled(isShuffled);
+    if (isShuffled) playbackMode = PlaybackMode.shuffle;
+    else playbackMode = PlaybackMode.normal;
   }
   
   void cycleRepeat() {
     repeatMode = RepeatMode.values[(repeatMode.index + 1) % RepeatMode.values.length];
     if (repeatMode == RepeatMode.one) {
-      _audioPlayer.setLoopMode(LoopMode.one);
+      _audioPlayer?.setLoopMode(LoopMode.one);
     } else if (repeatMode == RepeatMode.all) {
-      _audioPlayer.setLoopMode(LoopMode.all);
+      _audioPlayer?.setLoopMode(LoopMode.all);
     } else {
-      _audioPlayer.setLoopMode(LoopMode.off);
+      _audioPlayer?.setLoopMode(LoopMode.off);
     }
   }
 
